@@ -1,0 +1,40 @@
+{
+  "name": "argos",
+  "version": "0.1.0",
+  "description": "Argos — petit gestionnaire de tickets, fil rouge de la formation Claude Code",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:api": "node --watch-path=src/api --disable-warning=ExperimentalWarning src/api/server.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "node --disable-warning=ExperimentalWarning src/api/server.js",
+    "db:migrate": "node --disable-warning=ExperimentalWarning scripts/migrate.js",
+    "db:reset": "node --disable-warning=ExperimentalWarning scripts/reset-db.js",
+    "notif:mock": "node scripts/notif-mock.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "eslint": "^10.0.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^17.0.0",
+    "jsdom": "^27.0.0",
+    "supertest": "^7.1.0",
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
+  }
+}

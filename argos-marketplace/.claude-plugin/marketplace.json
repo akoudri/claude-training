@@ -1,0 +1,16 @@
+{
+  "name": "janus-argos",
+  "owner": { "name": "Janus Academy", "email": "contact@janus-academy.fr" },
+  "metadata": {
+    "description": "Marketplace de démonstration de la formation Claude Code (fil rouge Argos)",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "argos-toolkit",
+      "source": "./plugins/argos-toolkit",
+      "description": "Outils d'équipe pour Argos : skill /changelog, sub-agent test-runner, rappel des conventions au démarrage",
+      "version": "1.0.0"
+    }
+  ]
+}

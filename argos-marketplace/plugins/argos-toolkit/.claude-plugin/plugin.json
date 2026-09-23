@@ -1,0 +1,6 @@
+{
+  "name": "argos-toolkit",
+  "description": "Outils d'équipe pour Argos : skill /changelog, sub-agent test-runner, rappel des conventions au démarrage",
+  "version": "1.0.0",
+  "author": { "name": "Janus Academy" }
+}

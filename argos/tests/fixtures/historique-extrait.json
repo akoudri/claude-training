@@ -1,0 +1,6 @@
+[
+  { "title": "Ticket ouvert", "status": "open", "priority": "normal", "createdAt": "2025-11-01T10:00:00Z" },
+  { "title": "Ticket en cours", "status": "in_progress", "priority": "high", "createdAt": "2025-11-02T10:00:00Z" },
+  { "title": "Ticket clos", "status": "closed", "priority": "low", "createdAt": "2025-11-03T10:00:00Z" },
+  { "title": "Ticket clos importé de l'ancien outil", "status": "Closed", "priority": "normal", "createdAt": "2025-11-04T10:00:00Z" }
+]

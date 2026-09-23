@@ -1,0 +1,8 @@
+argos/node_modules/
+argos/dist/
+argos/data/*.db
+argos/data/*.db-*
+argos/.env
+argos/coverage/
+.claude/settings.local.json
+local/
