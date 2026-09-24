@@ -27,9 +27,9 @@ npm run notif:mock           # faux service de notification sur :4010
 ```
 
 Configuration locale : copier `.env.example` en `.env` (chargé par `src/api/env.js` via
-`process.loadEnvFile`). Variables : `PORT`, `NOTIF_API_URL`, `ARGOS_DB` (chemin de la base,
-défaut `data/argos.db`). Tous les chemins sont absolus (`src/api/paths.js`) ; `HOST` (défaut
-`127.0.0.1`) règle l'adresse d'écoute.
+`process.loadEnvFile`). Variables : `PORT`, `HOST`, `NOTIF_API_URL`, `NOTIF_API_KEY`, `ARGOS_DB`
+(chemin de la base, défaut `data/argos.db`). Tous les chemins sont absolus (`src/api/paths.js`) ;
+`HOST` (défaut `127.0.0.1`) règle l'adresse d'écoute.
 
 ## Architecture
 
@@ -44,8 +44,9 @@ défaut `data/argos.db`). Tous les chemins sont absolus (`src/api/paths.js`) ; `
   (`findAll(db, { status })`, `countByStatus(db)`). Le filtre `open` signifie « non clos »
   (`open` + `in_progress`).
 - **Notifications** (`services/notifier.js`) : envoyées à la création et à chaque changement de
-  statut ; les routes les envoient en arrière-plan (`notifyInBackground`) : la réponse n'attend pas le service, et un échec est seulement journalisé.
-  L'URL et la clé viennent de `NOTIF_API_URL` / `NOTIF_API_KEY` ; sans elles le notificateur est inactif.
+  statut ; les routes les envoient en arrière-plan (`notifyInBackground`) : la réponse n'attend
+  pas le service, et un échec est seulement journalisé. L'URL et la clé viennent de
+  `NOTIF_API_URL` / `NOTIF_API_KEY` ; sans elles le notificateur est inactif.
 - **Migrations** : fichiers SQL numérotés dans `migrations/`, appliqués par ordre alphabétique dans
   une transaction et tracés dans `schema_migrations`. Une migration déjà appliquée ne doit jamais
   être modifiée : toute évolution du schéma passe par un nouveau fichier.

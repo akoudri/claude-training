@@ -17,4 +17,14 @@ describe('client API', () => {
     stubFetch(502, '<html>Bad Gateway</html>');
     await expect(api.getStats()).rejects.toThrow('HTTP 502');
   });
+
+  it("indique le code HTTP quand le message d'erreur est vide", async () => {
+    stubFetch(500, '{"error":""}');
+    await expect(api.getStats()).rejects.toThrow('HTTP 500');
+  });
+
+  it('indique le code HTTP pour un corps JSON null', async () => {
+    stubFetch(500, 'null');
+    await expect(api.getStats()).rejects.toThrow('HTTP 500');
+  });
 });

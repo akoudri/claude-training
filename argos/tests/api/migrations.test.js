@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { copyFileSync, mkdtempSync, readdirSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb, migrate, MIGRATIONS_DIR } from '../../src/api/db.js';
@@ -7,10 +7,14 @@ import { openDb, migrate, MIGRATIONS_DIR } from '../../src/api/db.js';
 // Applique les migrations jusqu'à `last` incluse, pour simuler une base créée avant les suivantes.
 function migrateUpTo(db, last) {
   const dir = mkdtempSync(join(tmpdir(), 'argos-migrations-'));
-  for (const name of readdirSync(MIGRATIONS_DIR)) {
-    if (name.endsWith('.sql') && name <= last) copyFileSync(join(MIGRATIONS_DIR, name), join(dir, name));
+  try {
+    for (const name of readdirSync(MIGRATIONS_DIR)) {
+      if (name.endsWith('.sql') && name <= last) copyFileSync(join(MIGRATIONS_DIR, name), join(dir, name));
+    }
+    migrate(db, dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  migrate(db, dir);
 }
 
 describe('migrations', () => {
@@ -49,7 +53,7 @@ describe('003 — normalisation des tickets', () => {
     });
   });
 
-  it('ne reatribue pas le numero d un ticket supprime', () => {
+  it('ne réattribue pas le numéro d’un ticket supprimé', () => {
     const db = openDb(':memory:');
     migrateUpTo(db, '002_add_assignee.sql');
     db.exec("INSERT INTO tickets (title) VALUES ('A'), ('B'), ('C')");

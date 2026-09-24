@@ -7,7 +7,7 @@ import { STATUSES, PRIORITIES } from './repositories/tickets.js';
 function canonical(value, allowed, fallback, label, index) {
   const normalized = String(value ?? fallback).trim().toLowerCase();
   if (!allowed.includes(normalized)) {
-    throw new Error(`Ticket ${index + 1} : ${label} inconnu « ${value} »`);
+    throw new Error(`Ticket ${index + 1} : ${label} « ${value} »`);
   }
   return normalized;
 }
@@ -32,8 +32,8 @@ export function importTickets(db, records, { name } = {}) {
       insert.run(
         r.title,
         r.description ?? '',
-        canonical(r.status, STATUSES, 'open', 'statut', i),
-        canonical(r.priority, PRIORITIES, 'normal', 'priorité', i),
+        canonical(r.status, STATUSES, 'open', 'statut inconnu', i),
+        canonical(r.priority, PRIORITIES, 'normal', 'priorité inconnue', i),
         r.assignee ?? null,
         sqliteDate(r.createdAt, i),
         sqliteDate(r.updatedAt ?? r.createdAt, i),

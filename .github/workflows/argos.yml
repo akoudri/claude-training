@@ -1,7 +1,11 @@
 name: argos
 
+permissions:
+  contents: read
+
 on:
   push:
+    branches: [main]
     paths: ['argos/**', '.github/workflows/argos.yml']
   pull_request:
     paths: ['argos/**', '.github/workflows/argos.yml']

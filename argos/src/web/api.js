@@ -11,7 +11,7 @@ async function request(path, options = {}) {
   } catch {
     if (res.ok) throw new Error('Réponse invalide du serveur');
   }
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
   return body;
 }
 
