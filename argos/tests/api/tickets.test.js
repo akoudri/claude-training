@@ -117,4 +117,10 @@ describe('validation des champs', () => {
     const res = await request(app).patch('/api/tickets/1').send({ title: '  Nouveau titre  ' });
     expect(res.body.title).toBe('Nouveau titre');
   });
+
+  it('nomme le champ trop long en français', async () => {
+    const { app } = setup({ fixture: null });
+    const res = await request(app).post('/api/tickets').send({ title: 'x'.repeat(201) });
+    expect(res.body.error).toBe('Le champ titre dépasse 200 caractères');
+  });
 });

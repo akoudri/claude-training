@@ -6,7 +6,11 @@ function badRequest(res, message) {
   return res.status(400).json({ error: message });
 }
 
-const MAX_LENGTH = { title: 200, description: 5000, assignee: 100 };
+const MAX_LENGTH = {
+  title: { max: 200, label: 'titre' },
+  description: { max: 5000, label: 'description' },
+  assignee: { max: 100, label: 'responsable' },
+};
 
 function validate(body, { partial }) {
   if (!partial || body.title !== undefined) {
@@ -18,9 +22,9 @@ function validate(body, { partial }) {
   if (body.assignee !== undefined && body.assignee !== null && typeof body.assignee !== 'string') {
     return 'Le responsable doit être un texte ou null';
   }
-  for (const [field, max] of Object.entries(MAX_LENGTH)) {
+  for (const [field, { max, label }] of Object.entries(MAX_LENGTH)) {
     if (typeof body[field] === 'string' && body[field].length > max) {
-      return `Le champ ${field} dépasse ${max} caractères`;
+      return `Le champ ${label} dépasse ${max} caractères`;
     }
   }
   if (body.status !== undefined && !tickets.STATUSES.includes(body.status)) {
