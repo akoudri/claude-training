@@ -45,7 +45,7 @@ lancer les commandes depuis la racine d'`argos/`.
   calculés en JavaScript sur `findAll()`, pas en SQL. Le filtre `open` signifie « non clos »
   (`open` + `in_progress`).
 - **Notifications** (`services/notifier.js`) : envoyées à la création et à chaque changement de
-  statut ; un échec est journalisé mais ne doit jamais faire échouer la requête utilisateur.
+  statut ; les routes les envoient en arrière-plan (`notifyInBackground`) : la réponse n'attend pas le service, et un échec est seulement journalisé.
   L'URL et la clé viennent de `NOTIF_API_URL` / `NOTIF_API_KEY` ; sans elles le notificateur est inactif.
 - **Migrations** : fichiers SQL numérotés dans `migrations/`, appliqués par ordre alphabétique dans
   une transaction et tracés dans `schema_migrations`. Une migration déjà appliquée ne doit jamais

@@ -6,6 +6,11 @@ function badRequest(res, message) {
   return res.status(400).json({ error: message });
 }
 
+// Envoi en arrière-plan : la réponse à l'utilisateur n'attend pas le service de notification.
+function notifyInBackground(notifier, event, payload) {
+  notifier.notify(event, payload).catch((err) => console.warn(`[notifier] ${event} : ${err.message}`));
+}
+
 const MAX_LENGTH = {
   title: { max: 200, label: 'titre' },
   description: { max: 5000, label: 'description' },
@@ -49,16 +54,16 @@ export function ticketsRouter({ db, notifier }) {
     res.json(ticket);
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', (req, res) => {
     const error = validate(req.body ?? {}, { partial: false });
     if (error) return badRequest(res, error);
     const { title, description, priority, assignee } = req.body;
     const ticket = tickets.create(db, { title: title.trim(), description, priority, assignee });
-    await notifier.notify('ticket.created', { id: ticket.id, title: ticket.title });
+    notifyInBackground(notifier, 'ticket.created', { id: ticket.id, title: ticket.title });
     res.status(201).json(ticket);
   });
 
-  router.patch('/:id', async (req, res) => {
+  router.patch('/:id', (req, res) => {
     const id = Number(req.params.id);
     const before = tickets.findById(db, id);
     if (!before) return res.status(404).json({ error: 'Ticket introuvable' });
@@ -68,7 +73,7 @@ export function ticketsRouter({ db, notifier }) {
     if (typeof changes.title === 'string') changes.title = changes.title.trim();
     const after = tickets.update(db, id, changes);
     if (after.status !== before.status) {
-      await notifier.notify('ticket.status_changed', { id, from: before.status, to: after.status });
+      notifyInBackground(notifier, 'ticket.status_changed', { id, from: before.status, to: after.status });
     }
     res.json(after);
   });
