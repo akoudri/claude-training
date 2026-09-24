@@ -51,9 +51,8 @@ lancer les commandes depuis la racine d'`argos/`.
   une transaction et tracés dans `schema_migrations`. Une migration déjà appliquée ne doit jamais
   être modifiée : toute évolution du schéma passe par un nouveau fichier.
 - **Import** (`src/api/import.js`) : reprend l'export de l'ancien outil (champs camelCase
-  `createdAt`/`updatedAt` → colonnes snake_case). Les données historiques contiennent des valeurs
-  non canoniques (`Closed`, `CLOSED`, `Open`, `High`) et des dates ISO `…Z`, alors que les tickets
-  créés par l'API ont le format SQLite `YYYY-MM-DD HH:MM:SS`.
+  `createdAt`/`updatedAt` → colonnes snake_case). L'import ramène statuts et priorités à leur forme canonique
+  (`Closed` → `closed`), convertit les dates ISO au format SQLite `YYYY-MM-DD HH:MM:SS` et refuse toute valeur inconnue.
 - **Interface** (`src/web/`) : `App.jsx` détient l'état (filtre, liste, stats, sélection) et
   recharge tout via un compteur `version` après chaque création ou modification ; les composants
   enfants appellent `api.js` puis `onCreated` / `onUpdated`. Les libellés français des statuts et
