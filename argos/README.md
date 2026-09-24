@@ -65,7 +65,8 @@ Statuts : `open`, `in_progress`, `closed`. Priorités : `low`, `normal`, `high`.
 Chaque création de ticket et chaque changement de statut est envoyé au service de notification
 Argos. L'URL du service et sa clé d'API sont lues dans `NOTIF_API_URL` et `NOTIF_API_KEY` ; si l'une des
 deux manque, les notifications sont désactivées. Pour travailler sans le vrai service, lancer
-`npm run notif:mock` et reprendre les valeurs de `.env.example` dans `.env`.
+`npm run notif:mock` et reprendre les valeurs de `.env.example` dans `.env`. Une notification qui
+échoue est journalisée mais ne bloque jamais l'action de l'utilisateur.
 
 ## Migrations
 
