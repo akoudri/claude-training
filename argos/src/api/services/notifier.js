@@ -1,8 +1,17 @@
 // Client du service de notification Argos (envoi d'événements aux abonnés).
-const NOTIF_API_URL = process.env.NOTIF_API_URL ?? 'https://api.notifications-argos.example';
-const NOTIF_API_KEY = 'ntf_live_8f3e2b9c4d1a7e6f5b0c9d8e7f6a5b4c';
+// L'URL et la clé viennent de l'environnement (.env) ; sans elles, les notifications sont
+// désactivées plutôt qu'envoyées vers un service par défaut.
+export function createNotifier({
+  url = process.env.NOTIF_API_URL,
+  apiKey = process.env.NOTIF_API_KEY,
+  fetchImpl = fetch,
+  logger = console,
+} = {}) {
+  if (!url || !apiKey) {
+    logger.warn('[notifier] NOTIF_API_URL ou NOTIF_API_KEY non défini : notifications désactivées');
+    return { async notify() {} };
+  }
 
-export function createNotifier({ url = NOTIF_API_URL, fetchImpl = fetch, logger = console } = {}) {
   return {
     async notify(event, payload) {
       try {
@@ -10,7 +19,7 @@ export function createNotifier({ url = NOTIF_API_URL, fetchImpl = fetch, logger 
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            authorization: `Bearer ${NOTIF_API_KEY}`,
+            authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({ event, payload, sentAt: new Date().toISOString() }),
           signal: AbortSignal.timeout(2000),
