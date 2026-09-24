@@ -39,10 +39,9 @@ lancer les commandes depuis la racine d'`argos/`.
   table `tickets` est vide, puis écoute HTTP.
 - Chaîne en couches : `routes/` (validation HTTP, codes de réponse, déclenchement des notifications)
   → `repositories/tickets.js` (SQL, source de vérité des valeurs `STATUSES` / `PRIORITIES` et de la
-  liste blanche `UPDATABLE`) → `services/` (logique pure : filtres, statistiques ; client de
-  notification).
-- Le filtrage par statut (`services/filters.js`) et les statistiques (`services/stats.js`) sont
-  calculés en JavaScript sur `findAll()`, pas en SQL. Le filtre `open` signifie « non clos »
+  liste blanche `UPDATABLE`) → `services/` (logique pure : client de notification).
+- Le filtrage par statut et les statistiques sont faits en SQL dans `repositories/tickets.js`
+  (`findAll(db, { status })`, `countByStatus(db)`). Le filtre `open` signifie « non clos »
   (`open` + `in_progress`).
 - **Notifications** (`services/notifier.js`) : envoyées à la création et à chaque changement de
   statut ; les routes les envoient en arrière-plan (`notifyInBackground`) : la réponse n'attend pas le service, et un échec est seulement journalisé.

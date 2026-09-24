@@ -1,8 +1,7 @@
 import express from 'express';
 import { existsSync } from 'node:fs';
 import { ticketsRouter } from './routes/tickets.js';
-import { findAll } from './repositories/tickets.js';
-import { countByStatus } from './services/stats.js';
+import { countByStatus } from './repositories/tickets.js';
 
 export function createApp({ db, notifier, staticDir }) {
   const app = express();
@@ -10,7 +9,7 @@ export function createApp({ db, notifier, staticDir }) {
   app.use(express.json({ limit: '64kb' }));
 
   app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
-  app.get('/api/stats', (req, res) => res.json(countByStatus(findAll(db))));
+  app.get('/api/stats', (req, res) => res.json(countByStatus(db)));
   app.use('/api/tickets', ticketsRouter({ db, notifier }));
 
   if (staticDir && existsSync(staticDir)) {

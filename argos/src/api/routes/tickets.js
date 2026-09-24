@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import * as tickets from '../repositories/tickets.js';
-import { filterByStatus } from '../services/filters.js';
 
 function badRequest(res, message) {
   return res.status(400).json({ error: message });
@@ -45,7 +44,7 @@ export function ticketsRouter({ db, notifier }) {
   const router = Router();
 
   router.get('/', (req, res) => {
-    res.json(filterByStatus(tickets.findAll(db), req.query.status));
+    res.json(tickets.findAll(db, { status: req.query.status }));
   });
 
   router.get('/:id', (req, res) => {

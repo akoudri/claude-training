@@ -24,6 +24,13 @@ describe('GET /api/tickets', () => {
       "Ticket clos importé de l'ancien outil",
     ]);
   });
+
+  it('renvoie tous les tickets pour un filtre inconnu', async () => {
+    const { app } = setup();
+    const res = await request(app).get('/api/tickets?status=constructor');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(4);
+  });
 });
 
 describe('GET /api/tickets/:id', () => {
