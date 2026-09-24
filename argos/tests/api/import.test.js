@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import { openDb, migrate } from '../../src/api/db.js';
-import { importTickets } from '../../src/api/import.js';
+import { importTickets, importFileOnce } from '../../src/api/import.js';
 
 function freshDb() {
   const db = openDb(':memory:');
@@ -47,6 +48,20 @@ describe('importTickets', () => {
         { title: 'B', status: 'wontfix', createdAt: '2025-11-01T10:00:00Z' },
       ]),
     ).toThrow(/wontfix/);
+    expect(db.prepare('SELECT count(*) AS n FROM tickets').get().n).toBe(0);
+  });
+});
+
+describe('importFileOnce', () => {
+  const file = fileURLToPath(new URL('../fixtures/historique-extrait.json', import.meta.url));
+
+  it("importe un fichier la première fois, puis l'ignore même si la base a été vidée", () => {
+    const db = freshDb();
+    expect(importFileOnce(db, file)).toBe(4);
+
+    db.exec('DELETE FROM tickets');
+
+    expect(importFileOnce(db, file)).toBeNull();
     expect(db.prepare('SELECT count(*) AS n FROM tickets').get().n).toBe(0);
   });
 });

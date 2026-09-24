@@ -68,3 +68,21 @@ describe('003 — normalisation des tickets', () => {
     expect(() => db.prepare("INSERT INTO tickets (title, priority) VALUES ('A', 'urgent')").run()).toThrow(/CHECK/);
   });
 });
+
+describe('004 — suivi des imports', () => {
+  it("considère l'historique comme déjà importé sur une base qui contient des tickets", () => {
+    const db = openDb(':memory:');
+    migrateUpTo(db, '003_normalize_tickets.sql');
+    db.exec("INSERT INTO tickets (title) VALUES ('A')");
+
+    migrate(db);
+
+    expect(db.prepare('SELECT name FROM imports').all().map((r) => r.name)).toEqual(['historique.json']);
+  });
+
+  it('ne marque rien sur une base neuve', () => {
+    const db = openDb(':memory:');
+    migrate(db);
+    expect(db.prepare('SELECT count(*) AS n FROM imports').get().n).toBe(0);
+  });
+});

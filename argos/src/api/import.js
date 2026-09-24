@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { STATUSES, PRIORITIES } from './repositories/tickets.js';
 
 // L'ancien outil n'imposait pas la casse ('Closed', 'CLOSED', 'High'…) : chaque valeur est
@@ -19,13 +20,14 @@ function sqliteDate(iso, index) {
 }
 
 // Import de l'historique des tickets (export de l'ancien outil de support).
-export function importTickets(db, records) {
+export function importTickets(db, records, { name } = {}) {
   const insert = db.prepare(`INSERT INTO tickets
     (title, description, status, priority, assignee, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`);
 
   db.exec('BEGIN');
   try {
+    if (name) db.prepare('INSERT INTO imports (name) VALUES (?)').run(name);
     records.forEach((r, i) => {
       insert.run(
         r.title,
@@ -45,6 +47,10 @@ export function importTickets(db, records) {
   return records.length;
 }
 
-export function importFile(db, file) {
-  return importTickets(db, JSON.parse(readFileSync(file, 'utf8')));
+// Importe un fichier d'historique s'il ne l'a jamais été (suivi dans la table imports).
+// Renvoie le nombre de tickets importés, ou null si le fichier avait déjà été importé.
+export function importFileOnce(db, file) {
+  const name = basename(file);
+  if (db.prepare('SELECT 1 FROM imports WHERE name = ?').get(name)) return null;
+  return importTickets(db, JSON.parse(readFileSync(file, 'utf8')), { name });
 }

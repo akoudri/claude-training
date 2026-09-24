@@ -13,8 +13,9 @@ npm install
 npm run dev        # API sur http://localhost:3000 + interface sur http://localhost:5173
 ```
 
-Au premier démarrage, l'API applique les migrations puis importe l'historique de l'ancien outil
-de support (`data/historique.json`) dans `data/argos.db`.
+Au premier démarrage, l'API applique les migrations puis importe une seule fois l'historique de
+l'ancien outil de support (`data/historique.json`) dans `data/argos.db`. Par défaut elle n'écoute que
+sur `127.0.0.1` (variable `HOST`), car elle n'a pas d'authentification.
 
 ## Scripts
 

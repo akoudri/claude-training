@@ -28,15 +28,15 @@ npm run notif:mock           # faux service de notification sur :4010
 
 Configuration locale : copier `.env.example` en `.env` (chargé par `src/api/env.js` via
 `process.loadEnvFile`). Variables : `PORT`, `NOTIF_API_URL`, `ARGOS_DB` (chemin de la base,
-défaut `data/argos.db`). Les chemins `data/…`, `dist` et `.env` sont relatifs au répertoire courant :
-lancer les commandes depuis la racine d'`argos/`.
+défaut `data/argos.db`). Tous les chemins sont absolus (`src/api/paths.js`) ; `HOST` (défaut
+`127.0.0.1`) règle l'adresse d'écoute.
 
 ## Architecture
 
 - **`src/api/app.js`** — `createApp({ db, notifier, staticDir })` assemble l'application sans effet
   de bord ; toutes les dépendances sont injectées. **`server.js`** est le seul point d'entrée qui a
-  des effets : ouverture de la base, migrations, import initial de `data/historique.json` si la
-  table `tickets` est vide, puis écoute HTTP.
+  des effets : ouverture de la base, migrations, import unique de `data/historique.json`
+  (`importFileOnce`, suivi dans la table `imports`), puis écoute HTTP.
 - Chaîne en couches : `routes/` (validation HTTP, codes de réponse, déclenchement des notifications)
   → `repositories/tickets.js` (SQL, source de vérité des valeurs `STATUSES` / `PRIORITIES` et de la
   liste blanche `UPDATABLE`) → `services/` (logique pure : client de notification).
