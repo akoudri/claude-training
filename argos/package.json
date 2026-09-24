@@ -8,14 +8,17 @@
     "node": ">=22.13"
   },
   "scripts": {
+    "predev": "node scripts/check-node.js",
     "dev": "node scripts/dev.js",
     "dev:api": "node --watch-path=src/api --disable-warning=ExperimentalWarning src/api/server.js",
     "dev:web": "vite",
     "build": "vite build",
+    "prestart": "node scripts/check-node.js",
     "start": "node --disable-warning=ExperimentalWarning src/api/server.js",
     "db:migrate": "node --disable-warning=ExperimentalWarning scripts/migrate.js",
     "db:reset": "node --disable-warning=ExperimentalWarning scripts/reset-db.js",
     "notif:mock": "node scripts/notif-mock.js",
+    "pretest": "node scripts/check-node.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint ."

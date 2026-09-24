@@ -1,0 +1,25 @@
+name: argos
+
+on:
+  push:
+    paths: ['argos/**', '.github/workflows/argos.yml']
+  pull_request:
+    paths: ['argos/**', '.github/workflows/argos.yml']
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: argos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: argos/.nvmrc
+          cache: npm
+          cache-dependency-path: argos/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
