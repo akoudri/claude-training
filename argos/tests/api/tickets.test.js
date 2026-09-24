@@ -90,3 +90,31 @@ describe('PATCH /api/tickets/:id', () => {
     expect(notifier.events).toEqual([]);
   });
 });
+
+describe('validation des champs', () => {
+  it.each([
+    ['une description non textuelle', { title: 'x', description: { a: 1 } }],
+    ['un responsable non textuel', { title: 'x', assignee: ['camille'] }],
+    ['un titre trop long', { title: 'x'.repeat(201) }],
+    ['une description trop longue', { title: 'x', description: 'x'.repeat(5001) }],
+  ])('POST refuse %s avec 400', async (_label, body) => {
+    const { app } = setup({ fixture: null });
+    const res = await request(app).post('/api/tickets').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it('PATCH accepte de retirer le responsable', async () => {
+    const { app } = setup();
+    await request(app).patch('/api/tickets/1').send({ assignee: 'camille' });
+    const res = await request(app).patch('/api/tickets/1').send({ assignee: null });
+    expect(res.status).toBe(200);
+    expect(res.body.assignee).toBeNull();
+  });
+
+  it('PATCH retire les espaces autour du titre', async () => {
+    const { app } = setup();
+    const res = await request(app).patch('/api/tickets/1').send({ title: '  Nouveau titre  ' });
+    expect(res.body.title).toBe('Nouveau titre');
+  });
+});
