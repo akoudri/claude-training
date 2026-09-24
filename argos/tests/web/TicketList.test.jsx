@@ -30,11 +30,11 @@ describe('<TicketList>', () => {
     expect(onSelect).toHaveBeenCalledWith(2);
   });
 
-  it('se sélectionne au clavier', () => {
-    const onSelect = vi.fn();
-    render(<TicketList tickets={tickets} onSelect={onSelect} />);
-    const item = screen.getByRole('button', { name: /Second/ });
-    fireEvent.keyDown(item, { key: 'Enter' });
-    expect(onSelect).toHaveBeenCalledWith(2);
+  it('garde la sémantique de liste avec un vrai bouton par ticket', () => {
+    render(<TicketList tickets={tickets} onSelect={() => {}} />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    const button = screen.getByRole('button', { name: /Second/ });
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.getAttribute('type')).toBe('button');
   });
 });
