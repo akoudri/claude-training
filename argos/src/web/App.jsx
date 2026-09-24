@@ -15,7 +15,7 @@ export default function App() {
   const [filter, setFilter] = useState('open');
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selected, setSelected] = useState(null);
   const [error, setError] = useState(null);
 
   const [version, setVersion] = useState(0);
@@ -36,7 +36,12 @@ export default function App() {
     };
   }, [filter, version]);
 
-  const selected = tickets.find((t) => t.id === selectedId) ?? null;
+  // Le détail reste affiché même si le ticket sort du filtre courant (par exemple clos sous « Ouverts »).
+  const select = (id) => setSelected(tickets.find((t) => t.id === id) ?? null);
+  const handleUpdated = (ticket) => {
+    setSelected(ticket);
+    refresh();
+  };
 
   return (
     <div className="app">
@@ -61,12 +66,12 @@ export default function App() {
 
       <main>
         <section>
-          <TicketList tickets={tickets} selectedId={selectedId} onSelect={setSelectedId} />
+          <TicketList tickets={tickets} selectedId={selected?.id ?? null} onSelect={select} />
           <NewTicketForm onCreated={refresh} />
         </section>
         <aside>
           {selected ? (
-            <TicketDetail ticket={selected} onUpdated={refresh} />
+            <TicketDetail key={selected.id} ticket={selected} onUpdated={handleUpdated} />
           ) : (
             <p className="hint">Sélectionner un ticket pour afficher son détail.</p>
           )}

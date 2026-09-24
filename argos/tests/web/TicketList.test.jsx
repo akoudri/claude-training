@@ -29,4 +29,12 @@ describe('<TicketList>', () => {
     fireEvent.click(screen.getByText('Second'));
     expect(onSelect).toHaveBeenCalledWith(2);
   });
+
+  it('se sélectionne au clavier', () => {
+    const onSelect = vi.fn();
+    render(<TicketList tickets={tickets} onSelect={onSelect} />);
+    const item = screen.getByRole('button', { name: /Second/ });
+    fireEvent.keyDown(item, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith(2);
+  });
 });
