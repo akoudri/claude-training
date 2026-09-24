@@ -3,7 +3,14 @@ async function request(path, options = {}) {
     headers: { 'content-type': 'application/json' },
     ...options,
   });
-  const body = await res.json();
+  // Un proxy ou une page d'erreur peut renvoyer autre chose que du JSON.
+  const text = await res.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    if (res.ok) throw new Error('Réponse invalide du serveur');
+  }
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return body;
 }
