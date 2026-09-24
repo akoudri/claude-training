@@ -20,6 +20,8 @@ npm start                    # API seule, sert aussi dist/ si construit (npm run
 npm test                     # toute la suite Vitest (API + interface)
 npx vitest run tests/api/tickets.test.js        # un seul fichier
 npx vitest run -t "change le statut"            # un seul test, par nom
+npm run test:perf            # budgets de temps sur 10 000 tickets (hors npm test)
+npm run bench                # mesures vitest bench, sans seuil (hors npm test)
 npm run lint                 # ESLint (flat config, eslint.config.js)
 npm run db:migrate           # applique les migrations en attente
 npm run db:reset             # supprime data/argos.db, remigre, réimporte l'historique
@@ -66,3 +68,7 @@ Configuration locale : copier `.env.example` en `.env` (chargé par `src/api/env
 - Tests API avec `supertest` sur l'app retournée ; aucun serveur réel ni réseau.
 - Tests de composants : ajouter `// @vitest-environment jsdom` en tête de fichier (l'environnement
   par défaut est `node`) et appeler `cleanup` dans `afterEach`.
+- Performances (`tests/perf/`, config `vitest.perf.config.js`) : hors de `npm test` et de la CI car
+  dépendantes de la machine. `*.perf.js` = budgets larges (≈ 10× la mesure, pour détecter une
+  régression d'ordre de grandeur) ; `*.bench.js` = Vitest 5, où `bench` vient du contexte du test
+  (`test('…', async ({ bench }) => …)`), pas d'un import.

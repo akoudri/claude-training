@@ -24,6 +24,8 @@ sur `127.0.0.1` (variable `HOST`), car elle n'a pas d'authentification.
 | `npm run dev`         | API (rechargement automatique) et interface en parallèle             |
 | `npm start`           | API seule, qui sert aussi l'interface construite (`npm run build`)   |
 | `npm test`            | Suite de tests complète (API et interface)                           |
+| `npm run test:perf`   | Budgets de performance sur 10 000 tickets (hors `npm test`)          |
+| `npm run bench`       | Benchmarks sans seuil (opérations par seconde)                       |
 | `npm run lint`        | Analyse statique ESLint                                              |
 | `npm run build`       | Construction de l'interface dans `dist/`                             |
 | `npm run db:migrate`  | Applique les migrations en attente                                   |
@@ -45,7 +47,7 @@ src/web/            interface React
 migrations/         migrations SQL, appliquées dans l'ordre alphabétique
 data/               historique à importer et base SQLite locale (non versionnée)
 scripts/            scripts de développement
-tests/              tests Vitest (tests/api, tests/web) et jeux de données (tests/fixtures)
+tests/              tests Vitest (tests/api, tests/web, tests/perf) et jeux de données (tests/fixtures)
 ```
 
 ## API

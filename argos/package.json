@@ -21,6 +21,10 @@
     "pretest": "node scripts/check-node.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:perf": "node scripts/check-node.js",
+    "test:perf": "vitest run --config vitest.perf.config.js",
+    "prebench": "node scripts/check-node.js",
+    "bench": "vitest bench --run --config vitest.perf.config.js --reporter=verbose",
     "lint": "eslint ."
   },
   "dependencies": {
