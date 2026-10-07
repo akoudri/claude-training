@@ -29,6 +29,11 @@ describe(`performances avec ${N} tickets`, () => {
     expect(await median(() => tickets.countByStatus(ctx.db))).toBeLessThan(20);
   });
 
+  // Pire cas : tous les tickets correspondent (la normalisation s'applique à chaque ligne).
+  it('findAll avec recherche par mot-clé en moins de 250 ms', async () => {
+    expect(await median(() => tickets.findAll(ctx.db, { q: 'déscription' }))).toBeLessThan(250);
+  });
+
   it('findById répond en moins de 1 ms', async () => {
     expect(await median(() => tickets.findById(ctx.db, N / 2), { runs: 101 })).toBeLessThan(1);
   });

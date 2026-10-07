@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import App from '../../src/web/App.jsx';
 import { api } from '../../src/web/api.js';
 
@@ -35,5 +35,27 @@ describe('<App>', () => {
 
     expect(await screen.findByText('Aucun ticket.')).toBeTruthy();
     expect(screen.getByRole('heading', { name: /#1 — Panne/ })).toBeTruthy();
+  });
+
+  it('relance la liste avec le mot-clé saisi dans « Rechercher »', async () => {
+    api.getStats.mockResolvedValue({ total: 1, open: 1, in_progress: 0, closed: 0 });
+    api.listTickets.mockResolvedValue([ticket]);
+    render(<App />);
+    await screen.findByText('Panne');
+
+    fireEvent.change(screen.getByLabelText('Rechercher'), { target: { value: 'pan' } });
+
+    await waitFor(() => expect(api.listTickets).toHaveBeenLastCalledWith('open', 'pan'));
+  });
+
+  it('indique quand aucun ticket ne correspond à la recherche', async () => {
+    api.getStats.mockResolvedValue({ total: 1, open: 1, in_progress: 0, closed: 0 });
+    api.listTickets.mockResolvedValueOnce([ticket]).mockResolvedValue([]);
+    render(<App />);
+    await screen.findByText('Panne');
+
+    fireEvent.change(screen.getByLabelText('Rechercher'), { target: { value: 'vpn' } });
+
+    expect(await screen.findByText('Aucun ticket ne correspond à « vpn ».')).toBeTruthy();
   });
 });

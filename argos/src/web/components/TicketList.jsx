@@ -1,7 +1,7 @@
 import { STATUS_LABELS, PRIORITY_LABELS } from '../labels.js';
 
-export default function TicketList({ tickets, selectedId, onSelect }) {
-  if (tickets.length === 0) return <p className="hint">Aucun ticket.</p>;
+export default function TicketList({ tickets, selectedId, onSelect, emptyMessage = 'Aucun ticket.' }) {
+  if (tickets.length === 0) return <p className="hint">{emptyMessage}</p>;
 
   return (
     <ul className="tickets">

@@ -44,7 +44,11 @@ export function ticketsRouter({ db, notifier }) {
   const router = Router();
 
   router.get('/', (req, res) => {
-    res.json(tickets.findAll(db, { status: req.query.status }));
+    const { status, q } = req.query;
+    if (q !== undefined && typeof q !== 'string') {
+      return badRequest(res, 'Le mot-clé de recherche doit être un texte');
+    }
+    res.json(tickets.findAll(db, { status, q }));
   });
 
   router.get('/:id', (req, res) => {

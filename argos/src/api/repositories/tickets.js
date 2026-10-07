@@ -1,15 +1,27 @@
+import { normalize } from '../text.js';
+
 export const STATUSES = ['open', 'in_progress', 'closed'];
 export const PRIORITIES = ['low', 'normal', 'high'];
 
 // Filtres de liste : open = non clos (ouverts ou en cours), closed = clos, sinon tout.
 const STATUS_FILTERS = {
-  open: "WHERE status <> 'closed'",
-  closed: "WHERE status = 'closed'",
+  open: "status <> 'closed'",
+  closed: "status = 'closed'",
 };
 
-export function findAll(db, { status = 'all' } = {}) {
-  const where = Object.hasOwn(STATUS_FILTERS, status) ? STATUS_FILTERS[status] : '';
-  return db.prepare(`SELECT * FROM tickets ${where} ORDER BY id`).all();
+export function findAll(db, { status = 'all', q = '' } = {}) {
+  const conditions = [];
+  const params = [];
+  if (Object.hasOwn(STATUS_FILTERS, status)) conditions.push(STATUS_FILTERS[status]);
+  // Recherche dans le titre ou la description, sans tenir compte de la casse ni des accents.
+  // instr plutôt que LIKE : sous-chaîne exacte, sans jokers % et _ à échapper.
+  const keyword = normalize(q.trim());
+  if (keyword) {
+    conditions.push('(instr(normalize(title), ?) > 0 OR instr(normalize(description), ?) > 0)');
+    params.push(keyword, keyword);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return db.prepare(`SELECT * FROM tickets ${where} ORDER BY id`).all(...params);
 }
 
 // Compteurs affichés dans l'en-tête de l'interface.

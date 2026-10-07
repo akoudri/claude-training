@@ -52,8 +52,12 @@ démarrage. Ajouter un hôte au réseau autorisé = l'ajouter aux deux endroits.
   → `repositories/tickets.js` (SQL, source de vérité des valeurs `STATUSES` / `PRIORITIES` et de la
   liste blanche `UPDATABLE`) → `services/` (logique pure : client de notification).
 - Le filtrage par statut et les statistiques sont faits en SQL dans `repositories/tickets.js`
-  (`findAll(db, { status })`, `countByStatus(db)`). Le filtre `open` signifie « non clos »
+  (`findAll(db, { status, q })`, `countByStatus(db)`). Le filtre `open` signifie « non clos »
   (`open` + `in_progress`).
+- **Recherche** (`GET /api/tickets?q=`, décisions dans `docs/recherche-tickets.md`) : sous-chaîne
+  dans le titre ou la description, insensible à la casse et aux accents. `normalize`
+  (`src/api/text.js`) est enregistrée comme fonction SQLite par `openDb` : toute base doit être
+  ouverte par `openDb`, sinon les requêtes de recherche échouent (`no such function: normalize`).
 - **Notifications** (`services/notifier.js`) : envoyées à la création et à chaque changement de
   statut ; les routes les envoient en arrière-plan (`notifyInBackground`) : la réponse n'attend
   pas le service, et un échec est seulement journalisé. L'URL et la clé viennent de

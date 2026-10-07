@@ -13,6 +13,7 @@ const FILTERS = [
 
 export default function App() {
   const [filter, setFilter] = useState('open');
+  const [query, setQuery] = useState('');
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -23,7 +24,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.listTickets(filter), api.getStats()])
+    Promise.all([api.listTickets(filter, query), api.getStats()])
       .then(([list, counts]) => {
         if (cancelled) return;
         setTickets(list);
@@ -34,7 +35,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [filter, version]);
+  }, [filter, query, version]);
 
   // Le détail reste affiché même si le ticket sort du filtre courant (par exemple clos sous « Ouverts »).
   const select = (id) => setSelected(tickets.find((t) => t.id === id) ?? null);
@@ -62,11 +63,23 @@ export default function App() {
             {f.label}
           </button>
         ))}
+        <input
+          type="search"
+          aria-label="Rechercher"
+          placeholder="Rechercher…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
       </nav>
 
       <main>
         <section>
-          <TicketList tickets={tickets} selectedId={selected?.id ?? null} onSelect={select} />
+          <TicketList
+            tickets={tickets}
+            selectedId={selected?.id ?? null}
+            onSelect={select}
+            emptyMessage={query.trim() ? `Aucun ticket ne correspond à « ${query.trim()} ».` : undefined}
+          />
           <NewTicketForm onCreated={refresh} />
         </section>
         <aside>

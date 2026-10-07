@@ -27,4 +27,16 @@ describe('client API', () => {
     stubFetch(500, 'null');
     await expect(api.getStats()).rejects.toThrow('HTTP 500');
   });
+
+  it('transmet le mot-clé de recherche, encodé, avec le statut', async () => {
+    stubFetch(200, '[]');
+    await api.listTickets('open', 'é & co');
+    expect(fetch.mock.calls[0][0]).toBe('/api/tickets?status=open&q=%C3%A9+%26+co');
+  });
+
+  it("n'ajoute pas de mot-clé quand la recherche est vide", async () => {
+    stubFetch(200, '[]');
+    await api.listTickets('all', '');
+    expect(fetch.mock.calls[0][0]).toBe('/api/tickets?status=all');
+  });
 });

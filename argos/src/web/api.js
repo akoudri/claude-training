@@ -16,7 +16,11 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  listTickets: (status) => request(`/tickets?status=${status}`),
+  listTickets: (status, q = '') => {
+    const params = new URLSearchParams({ status });
+    if (q.trim()) params.set('q', q);
+    return request(`/tickets?${params}`);
+  },
   getStats: () => request('/stats'),
   createTicket: (ticket) => request('/tickets', { method: 'POST', body: JSON.stringify(ticket) }),
   updateTicket: (id, changes) =>
