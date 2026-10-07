@@ -12,7 +12,7 @@ Tout le contenu est rédigé en français.
   les apprenants clonent un dépôt Argos séparé, sans `CLAUDE.md`, que le lab M2 leur fait créer.
 - `argos-marketplace/` : marketplace de démonstration (plugin `argos-toolkit@janus-argos`), extension du lab M2.
 - `mcp/` : démos de serveurs MCP en Python (uv). `server.py` (bloc-notes NotesRapides), `blender_mcp_server.py` + `blender_server.py` (pont Claude Code → Blender, TCP 9876).
-- `local-llm/` : stack LLM locale (Ollama sur iGPU, Open WebUI, n8n, pgvector, passerelle nginx) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
+- `local-llm/` : stack LLM locale (Ollama sur CPU, ou sur GPU via `docker-compose.vulkan.yml` / `docker-compose.nvidia.yml` choisis par `COMPOSE_FILE` dans `.env` ; Open WebUI, n8n, pgvector, passerelle nginx) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
 - `local/` : matériel formateur (guide, bundles Argos, labs originaux, script de correction du support). Exclu de git.
 
 ## Commandes
@@ -25,6 +25,6 @@ Tout le contenu est rédigé en français.
 
 - Ne jamais versionner de secrets ni de données locales : `local-llm/.env`, `local-llm/n8n/config/*` (seuls les `*.example.json` sont suivis), `local-llm/documents/`, `local-llm/reports/`, `mcp/notes.json`. Vérifier le `.gitignore` à chaque nouvel ajout.
 - Les workflows de `local-llm/n8n/workflows/` sont générés par `build.mjs` à partir de `n8n/src/` : modifier les sources, pas le JSON. Ils ne doivent contenir aucun identifiant d'instance n8n.
-- Pas de chemins absolus propres à la machine dans les README et les tutoriels.
+- Pas de chemins absolus propres à la machine dans les README et les tutoriels. Les tutoriels doivent fonctionner sur toute machine : une durée ou un débit mesuré est attribué à la « configuration de référence » (Ryzen 7 7840HS, iGPU Radeon 780M, profil vulkan).
 - Garder labs, support, errata et état d'Argos cohérents entre eux.
 - Commits au format Conventional Commits.

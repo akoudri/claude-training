@@ -1,30 +1,31 @@
-# Configurer Open WebUI pour un LLM local sur iGPU (Radeon 780M)
+# Configurer Open WebUI pour un LLM local
 
-Ce tutoriel décrit la configuration d'Open WebUI appliquée à la stack `docker-compose.yml` de ce dépôt (Ollama + Open WebUI + Postgres/pgvector + n8n), et explique **pourquoi** chaque réglage compte sur une machine sans GPU dédié.
+Ce tutoriel décrit la configuration d'Open WebUI appliquée à la stack `docker-compose.yml` de ce dépôt (Ollama + Open WebUI + Postgres/pgvector + n8n), et explique **pourquoi** chaque réglage compte sur une machine sans gros GPU dédié.
 
-- **Machine cible** : Ryzen 7 7840HS, iGPU Radeon 780M, 30 Go de RAM partagée
+- **Machines** : toute machine avec Docker (Linux, macOS, Windows avec WSL2). Ollama tourne sur le CPU, ou sur un GPU AMD, Intel ou NVIDIA selon le profil choisi (section 2).
+- **Configuration de référence** : les durées et débits cités ont été mesurés sur un Ryzen 7 7840HS avec iGPU Radeon 780M (profil `vulkan`) et 30 Go de RAM. Sur une autre machine, les **ordres de grandeur** changent, pas les réglages : la section 2 explique comment mesurer les vôtres.
 - **Modèles** : `granite4.2:8b` (chat, contexte 32k) et `bge-m3` (embeddings)
-- **Versions testées** : Open WebUI 0.11.4, Ollama (image `latest`, backend Vulkan)
+- **Versions testées** : Open WebUI 0.11.4, Ollama (image `latest`, testée avec le backend Vulkan)
 
 ---
 
 ## 1. Comprendre les contraintes avant de régler quoi que ce soit
 
-Trois faits matériels expliquent tous les choix qui suivent.
+Trois faits matériels expliquent tous les choix qui suivent. Ils valent pour toute machine grand public ; seuls les chiffres changent.
 
 | Contrainte | Conséquence |
 |---|---|
-| L'iGPU n'adresse que ~15,8 Go de mémoire partagée (GTT) | Le modèle de chat doit faire ≤ ~8 Go. Sous Vulkan, impossible de répartir un gros modèle entre GPU et CPU. |
-| La génération est limitée par la bande passante mémoire (DDR5) | Un modèle dense de 8B en Q4 (~5 Go) plafonne à **~14,5 tokens/s**. Aucun paramètre logiciel ne fait mieux. |
+| La mémoire utilisable par le modèle est limitée : VRAM d'un GPU dédié, mémoire partagée d'un iGPU (~15,8 Go sur la référence), ou RAM en mode CPU | Le modèle de chat et son contexte doivent y tenir (~8 Go pour `granite4.2:8b` à 32k). Un modèle qui déborde du GPU passe en partie sur le CPU et ralentit fortement. Sur un iGPU sous Vulkan, ce partage n'aide même pas : la partie laissée au CPU est aussi réservée dans la mémoire partagée. |
+| La génération est limitée par la bande passante mémoire | Un modèle dense de 8B en Q4 (~5 Go) plafonne à **~14,5 tokens/s** sur la référence (DDR5 partagée). Un GPU dédié va plusieurs fois plus vite ; le CPU seul, nettement moins vite. Aucun paramètre logiciel ne dépasse ce plafond. |
 | Ollama tourne avec `OLLAMA_NUM_PARALLEL=1` | **Une seule requête à la fois.** Toute requête annexe (titre, tags…) passe *avant* ou *après* la vôtre et la fait attendre. |
 
-Ordres de grandeur mesurés sur cette machine :
+Ordres de grandeur mesurés sur la configuration de référence :
 
 - lecture du prompt (*prompt eval*) : **~250 tokens/s** → 1 400 tokens de contexte RAG ≈ 5 s ;
 - génération : **~14,5 tokens/s** → une réponse de 600 tokens ≈ 40 s ;
 - indexation d'un document de 142 extraits avec `bge-m3` : ~38 s (batch de 1).
 
-> **À retenir** : sur cette machine, chaque token généré coûte ~70 ms. L'essentiel de l'optimisation consiste à **ne pas faire générer de tokens inutiles** au modèle.
+> **À retenir** : sur la configuration de référence, chaque token généré coûte ~70 ms. L'essentiel de l'optimisation consiste à **ne pas faire générer de tokens inutiles** au modèle.
 
 ### Le symptôme de départ
 
@@ -39,8 +40,24 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
 ## 2. Premier démarrage
 
-1. Lancer la stack : `cp .env.example .env` (éditer les secrets), puis `docker compose up -d`.
-2. Attendre le téléchargement des modèles. Il n'y a rien à installer à la main : le service `ollama-init` télécharge `LLM_MODEL` et `EMBED_MODEL` (définis dans `.env`) dès qu'Ollama est prêt, puis s'arrête. Au premier lancement, cela représente ~6,5 Go et prend plusieurs minutes. Les lancements suivants sont immédiats, car les modèles restent dans le volume `ollama`.
+1. Créer le fichier de configuration : `cp .env.example .env`, puis remplacer les secrets (`openssl rand -hex 32`).
+2. **Adapter la stack à la machine**, dans `.env` :
+
+   | Machine | Ligne à décommenter dans `.env` | Vérification |
+   |---|---|---|
+   | Linux avec GPU AMD ou Intel (intégré ou dédié) | `COMPOSE_FILE=docker-compose.yml:docker-compose.vulkan.yml` | Reporter dans `RENDER_GID` et `VIDEO_GID` les numéros donnés par `getent group render video`. |
+   | Linux ou Windows (WSL2) avec GPU NVIDIA | `COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml` | Le pilote NVIDIA et le *NVIDIA Container Toolkit* doivent être installés (ils sont inclus dans Docker Desktop sous Windows). Sous Windows hors WSL, séparer les fichiers par `;`. |
+   | macOS, ou machine sans GPU utilisable | aucune | Ollama tourne sur le CPU. Docker n'a pas accès au GPU d'un Mac. |
+
+   Ajuster ensuite la mémoire :
+
+   - le modèle de chat et son contexte doivent tenir dans la mémoire du GPU, ou dans la RAM en mode CPU : ~8 Go pour `granite4.2:8b` à 32k ;
+   - avec moins de mémoire, réduire `OLLAMA_CONTEXT_LENGTH` à 16384, ou choisir un modèle plus petit dans `LLM_MODEL` (https://ollama.com/library). Le nom du modèle est alors à remplacer partout où ce tutoriel cite `granite4.2:8b`, et dans `n8n/src/constants.mjs` pour l'agent n8n (tutoriel 03) ;
+   - `OLLAMA_MEM_LIMIT` (20 Go par défaut) doit rester inférieur à la RAM de la machine ;
+   - si le port 5433 est déjà pris sur l'hôte, changer `POSTGRES_HOST_PORT`.
+
+3. Lancer la stack : `docker compose up -d`.
+4. Attendre le téléchargement des modèles. Il n'y a rien à installer à la main : le service `ollama-init` télécharge `LLM_MODEL` et `EMBED_MODEL` (définis dans `.env`) dès qu'Ollama est prêt, puis s'arrête. Au premier lancement, cela représente ~6,5 Go et prend plusieurs minutes. Les lancements suivants sont immédiats, car les modèles restent dans le volume `ollama`.
 
    ```bash
    docker compose logs -f ollama-init         # progression ; se termine par "success"
@@ -50,15 +67,27 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
    Si `ollama-init` s'arrête avec un code différent de 0 (coupure réseau, nom de modèle erroné dans `.env`), corriger la cause puis relancer le téléchargement avec `docker compose up ollama-init`.
 
-3. Ouvrir http://localhost:3000 et créer le compte. **Le premier compte créé devient administrateur.** Si la liste des modèles est vide, le téléchargement n'est pas terminé (étape 2) : recharger la page une fois qu'il est fini.
-4. Envoyer un premier message (par exemple « Bonjour ») pour charger le modèle, puis vérifier qu'il tourne à 100 % sur le GPU :
+5. Ouvrir http://localhost:3000 et créer le compte. **Le premier compte créé devient administrateur.** Si la liste des modèles est vide, le téléchargement n'est pas terminé (étape 4) : recharger la page une fois qu'il est fini.
+6. Envoyer un premier message (par exemple « Bonjour ») pour charger le modèle, puis vérifier où il tourne :
 
    ```bash
    docker compose exec ollama ollama ps
-   # PROCESSOR doit afficher "100% GPU"
+   # PROCESSOR : "100% GPU" avec un profil GPU, "100% CPU" sans profil
    ```
 
    Ollama ne charge un modèle en mémoire qu'à la première requête. Avant, `ollama ps` affiche une liste vide, ce qui ne veut pas dire que le modèle est absent : c'est `ollama list` qui indique les modèles installés.
+
+   Avec un profil GPU, un affichage `100% CPU` signifie qu'Ollama ne voit pas le GPU : `docker compose logs ollama | grep "inference compute"` doit citer le GPU (par exemple `library=Vulkan` ou `library=CUDA`). Un partage comme `40%/60% CPU/GPU` signifie que le modèle ne tient pas en mémoire GPU : réduire le contexte ou changer de modèle.
+
+7. Mesurer les débits de **votre** machine, qui serviront de repère à la place de ceux de la configuration de référence :
+
+   ```bash
+   docker compose exec ollama ollama run granite4.2:8b --verbose "Explique le RAG en trois phrases."
+   # prompt eval rate : vitesse de lecture du prompt (~250 tokens/s sur la référence)
+   # eval rate        : vitesse de génération (~14,5 tokens/s sur la référence)
+   ```
+
+   Plus la génération est lente, plus les réglages des sections 3 et 4 comptent. En mode CPU, elle peut descendre à quelques tokens/s : préférer alors un modèle plus petit.
 
 > ⚠️ **PersistentConfig** : au premier démarrage, Open WebUI copie les variables d'environnement (`RAG_TOP_K`, `CHUNK_SIZE`…) dans sa base (`webui.db`). Ensuite, **c'est la base qui fait foi**. Modifier `docker-compose.yml` n'a plus d'effet sur ces réglages : il faut passer par l'interface d'administration.
 
@@ -154,9 +183,9 @@ Open WebUI utilise le modèle de chat pour de petites tâches automatiques. Avec
 | **Title Generation** | Off *(ou On)* | ~5 s | Donne un titre à la conversation au premier échange. Coût faible (~20 tokens) : c'est une question de confort. Désactivé, le titre reprend le début du premier message. |
 | **Retrieval Query Generation** | **On** | ~5–7 s avant la réponse | Avant de chercher dans les documents, le modèle reformule la question en requêtes de recherche. C'est utile en conversation : « et pour le niveau L3 ? » devient une requête autonome sur le bon sujet. À désactiver si on pose toujours des questions complètes et qu'on veut gagner quelques secondes. |
 | **Web Search Query Generation** | **Off** | — | Sert uniquement à la recherche web, qui n'est pas configurée. |
-| **Autocomplete Generation** | **Off** | à chaque frappe | Propose des complétions pendant la saisie. Rédhibitoire sur un iGPU : chaque pause dans la frappe lance une génération. |
+| **Autocomplete Generation** | **Off** | à chaque frappe | Propose des complétions pendant la saisie. Rédhibitoire sur un modèle local lent : chaque pause dans la frappe lance une génération. |
 
-**Task Model** : on peut y désigner un modèle plus petit et plus rapide dédié à ces tâches. Ici on garde *Current Model*, car charger un second modèle de chat réduirait la mémoire GPU disponible.
+**Task Model** : on peut y désigner un modèle plus petit et plus rapide dédié à ces tâches. Ici on garde *Current Model*, car charger un second modèle de chat réduirait la mémoire disponible pour le modèle principal.
 
 Valider avec **Save**.
 
@@ -168,7 +197,7 @@ Valider avec **Save**.
 
 | Paramètre | Valeur | Ce que ça implique |
 |---|---|---|
-| **Embedding Model Engine / Model** | Ollama / `bge-m3` | Modèle multilingue (FR/EN) qui transforme chaque extrait en vecteur. Il tourne sur le GPU via Ollama et reste chargé à côté du modèle de chat (`OLLAMA_MAX_LOADED_MODELS=2`). |
+| **Embedding Model Engine / Model** | Ollama / `bge-m3` | Modèle multilingue (FR/EN) qui transforme chaque extrait en vecteur. Il tourne dans Ollama (sur le GPU si un profil GPU est actif) et reste chargé à côté du modèle de chat (`OLLAMA_MAX_LOADED_MODELS=2`). |
 | **Embedding Batch Size** | **32** | Nombre d'extraits envoyés en une fois au modèle d'embedding. À 1 (valeur par défaut), un document de 142 extraits fait 142 appels successifs (~38 s). En lot, l'indexation est plusieurs fois plus rapide. Cela n'a aucun effet sur la qualité. |
 | **Vector Database** | pgvector (`rag`) | Les vecteurs sont stockés dans Postgres (table `document_chunk`) et partagés avec n8n. |
 | **Chunk Size / Overlap** | 1000 / 150 | Taille des extraits en caractères (~250 tokens) et chevauchement entre deux extraits consécutifs. Des extraits plus petits rendent la recherche plus précise mais donnent moins de contexte. Le chevauchement évite de couper une idée en deux. |
@@ -187,7 +216,7 @@ Le RAG ne transmet au modèle que les **8 extraits les plus pertinents** (Top K)
 Pour un résumé, cliquer sur le fichier joint et choisir l'option qui utilise **le document entier** (*full context*). Le contenu complet est alors injecté, à deux conditions :
 
 - **le document doit tenir dans le contexte de 32k tokens**, soit ~100 pages de texte dense ;
-- **il faut accepter la lecture du prompt** : ~2 minutes pour 30 000 tokens à ~250 tokens/s.
+- **il faut accepter la lecture du prompt** : ~2 minutes pour 30 000 tokens à ~250 tokens/s sur la configuration de référence.
 
 Pour les gros documents, préférer un résumé section par section, ou un workflow n8n de résumé progressif.
 
@@ -204,7 +233,7 @@ Joindre un fichier à une conversation l'indexe **pour cette conversation seulem
    > Le bouton *Create* crée l'élément de l'onglet affiché. Sur l'onglet *Models*, il crée un modèle, pas une base.
 
 2. Renseigner un **nom** et une **description**. La description est visible par le modèle et l'aide à savoir quand s'en servir : décrire le contenu (« Rapports et cahiers des charges sur l'impact de SysML v2… ») plutôt que l'usage.
-3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Avec un batch de 32, un document de 170 extraits est indexé en ~13 s.
+3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Avec un batch de 32, un document de 170 extraits est indexé en ~13 s sur la configuration de référence.
 
 ### 6.2 Choisir le bon format de fichier
 
@@ -281,7 +310,7 @@ Suivre les logs pendant une requête :
 docker compose logs -f ollama | grep -E 'POST|new prompt|prompt eval|eval time'
 ```
 
-Ce qu'on doit observer pour une question avec un document joint :
+Ce qu'on doit observer pour une question avec un document joint (durées de la configuration de référence) :
 
 ```text
 POST "/api/chat" | 3.8s                        ← reformulation de la question (Retrieval Query Generation)
@@ -298,7 +327,7 @@ Signes d'un problème :
 | `task.n_tokens` de quelques centaines avec un document joint | Les extraits ne sont pas injectés : vérifier *Builtin Tools* (3.2) et, pour un assistant, le mode *Function Calling* (Legacy). |
 | Plusieurs `POST /api/chat` avant que la réponse ne s'affiche | Des tâches d'arrière-plan sont encore actives (section 4). |
 | Génération longue avec une réponse vide à l'écran | *think* n'est pas désactivé (3.1). |
-| `ollama ps` affiche un pourcentage de CPU | Le modèle ne tient pas en mémoire GPU : réduire le contexte ou changer de modèle. |
+| `ollama ps` affiche un pourcentage de CPU alors qu'un profil GPU est actif | Le modèle ne tient pas en mémoire GPU, ou le GPU n'est pas détecté : voir la section 2, étape 6. |
 
 ---
 
@@ -320,10 +349,10 @@ Signes d'un problème :
 | | Top K | 8 |
 | Workspace › Knowledge | documents | DOCX de préférence au PDF |
 
-**Résultat** : une question sur un document passe de plus de 5 minutes (sans aboutir) à **25–45 secondes** selon la longueur de la réponse, et le GPU est libre dès la fin de la réponse.
+**Résultat** sur la configuration de référence : une question sur un document passe de plus de 5 minutes (sans aboutir) à **25–45 secondes** selon la longueur de la réponse, et Ollama est libre dès la fin de la réponse.
 
 ### Pour aller plus loin
 
-- **Gagner en vitesse de génération** : seul un modèle *Mixture of Experts* (par exemple `granite4:tiny-h`, ~1B paramètres actifs par token) peut dépasser le plafond de ~14,5 tokens/s, au prix d'un raisonnement moins solide.
+- **Gagner en vitesse de génération** : seul un modèle *Mixture of Experts* (par exemple `granite4:tiny-h`, ~1B paramètres actifs par token) peut dépasser le plafond de génération d'un modèle dense (~14,5 tokens/s sur la référence), au prix d'un raisonnement moins solide.
 - **Améliorer le classement des extraits** : un modèle de *reranking* (par exemple `bge-reranker-v2-m3`) reclasse les extraits trouvés avant de les envoyer au modèle. La pertinence s'améliore, mais le calcul se fait sur le CPU du conteneur Open WebUI et ajoute quelques secondes par question.
 - **Nettoyer pgvector** : supprimer les collections `file-*` des fichiers joints lors d'essais (voir 6.4).

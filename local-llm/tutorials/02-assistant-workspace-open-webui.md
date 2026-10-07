@@ -2,7 +2,7 @@
 
 Ce guide explique comment assembler un **assistant spécialisé** (un « agent ») dans Open WebUI 0.11 : un modèle, des consignes, une base de documents et, si besoin, des outils. Il prend pour exemple l'assistant **Expert MBSE** construit sur `granite4.2:8b` et la base **MBSE Expert**.
 
-Il fait suite à [Configurer Open WebUI pour un LLM local sur iGPU](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG).
+Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG).
 
 ---
 
@@ -203,7 +203,7 @@ C'est le réglage le moins visible et le plus important. Open WebUI ne traite pa
 | Documents + quelques outils, les documents restant la source principale | **Legacy** | ❌ |
 | Agent qui choisit librement entre plusieurs outils et sources | Native | ✅ |
 
-Sur cette machine (~14,5 tokens/s), le troisième cas est lent et peu fiable avec un modèle de 8B. Pour de vrais agents, préférez un workflow **n8n** (nœud AI Agent), où les étapes sont décrites explicitement, et exposez-le comme un simple outil (voir 4.1).
+Sur la configuration de référence du tutoriel 01 (~14,5 tokens/s), le troisième cas est lent et peu fiable avec un modèle de 8B. Pour de vrais agents, préférez un workflow **n8n** (nœud AI Agent), où les étapes sont décrites explicitement, et exposez-le comme un simple outil (voir 4.1).
 
 Gardez **Native** sur le modèle de base `granite4.2:8b` : il n'a pas de base rattachée, et ce mode est le plus efficace pour les outils.
 

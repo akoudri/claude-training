@@ -1,10 +1,10 @@
-# Utiliser Claude Code dans VS Code avec le LLM local (Ollama, Radeon 780M)
+# Utiliser Claude Code dans VS Code avec le LLM local (Ollama)
 
 Ce tutoriel branche Claude Code (CLI et extension VS Code) sur l'Ollama de la stack `docker-compose.yml` de ce dépôt, au lieu de l'API d'Anthropic. Il explique **pourquoi** chaque variable d'environnement est nécessaire, et surtout le piège de la fenêtre de contexte, qui fait échouer une configuration par ailleurs correcte.
 
-- **Machine cible** : celle de [`configuration-open-webui.md`](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan, ~15,8 Go adressables)
+- **Configuration de référence** : les durées citées ont été mesurées sur celle du [tutoriel 01](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan, ~15,8 Go adressables). Le tutoriel fonctionne sur toute machine capable de faire tourner la stack ; seules les durées changent (voir le [tutoriel 01, section 2](01-configuration-open-webui.md#2-premier-démarrage)).
 - **Modèle retenu** : `ornith-code`, une variante à contexte de 64k du modèle `ornith:9b` (5,6 Go)
-- **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291. Le **CLI** a été testé, y compris dans le dev container. Le **panneau de l'extension VS Code** `anthropic.claude-code` a été testé dans le dev container du [tutoriel 2](05-claude-code-sandbox-devcontainer.md) : il s'installe et répond, sans écran de connexion. Sur l'hôte, ses réglages suivent la documentation de l'extension et son schéma (lu sur la version 2.1.289 de l'extension, le CLI étant en 2.1.291).
+- **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291. Le **CLI** a été testé, y compris dans le dev container. Le **panneau de l'extension VS Code** `anthropic.claude-code` a été testé dans le dev container du [tutoriel 05](05-claude-code-sandbox-devcontainer.md) : il s'installe et répond, sans écran de connexion. Sur l'hôte, ses réglages suivent la documentation de l'extension et son schéma (lu sur la version 2.1.289 de l'extension, le CLI étant en 2.1.291).
 - **Suite** : pour isoler l'agent du reste de la machine, voir [Isoler l'agent de code : sandbox et dev container](05-claude-code-sandbox-devcontainer.md)
 
 > **Périmètre** : ce tutoriel couvre l'usage local. Un petit modèle de 9B n'a ni la qualité ni la vitesse d'un modèle hébergé par Anthropic : c'est un agent de code **utilisable sur des tâches ciblées**, pas un remplaçant. Les limites sont détaillées à la section 6.
@@ -57,12 +57,12 @@ Tâche d'essai : corriger une fonction `slugify` pour que `node --test` passe (2
 
 | Modèle | Où | Résultat | Durée |
 |---|---|---|---|
-| `ornith-code` (`ornith:9b`, 64k) | CLI sur la machine | 3/3 tests, 12 tours | 6 min 51 s |
+| `ornith-code` (`ornith:9b`, 64k) | CLI sur l'hôte | 3/3 tests, 12 tours | 6 min 51 s |
 | `ornith-code` | Dev container, accès direct à Ollama | 3/3 tests | 78 s |
 | `ornith-code` | Dev container, via la passerelle `ollama-gateway` | 3/3 tests | 114 s |
 | `granite4.2-code` (`granite4.2:8b`, 64k) | Dev container et CLI | Code finalement correct, mais l'agent **ne s'arrête jamais** : timeout de 25 min, sur deux essais | 25 min (timeout) |
 
-Toutes ces mesures utilisent `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` (section 3.2).
+Toutes ces mesures utilisent `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` (section 3.2) et ont été faites sur la configuration de référence.
 
 Deux enseignements :
 
@@ -155,12 +155,12 @@ Sans `"ANTHROPIC_API_KEY": ""`, une clé réelle du shell risquerait d'être pr�
 
 | Flux | Avec cette configuration |
 |---|---|
-| Prompts, code lu, sorties d'outils | Envoyés **uniquement** au modèle local (`ANTHROPIC_BASE_URL` pointe sur Ollama). Le classifieur du mode *auto* utilise le **même** point d'accès (mesuré, voir 4.4 et le [piège du mode auto](05-claude-code-sandbox-devcontainer.md#mesures-sur-cette-machine)) : il ne sort pas non plus. |
+| Prompts, code lu, sorties d'outils | Envoyés **uniquement** au modèle local (`ANTHROPIC_BASE_URL` pointe sur Ollama). Le classifieur du mode *auto* utilise le **même** point d'accès (mesuré, voir 4.4 et le [piège du mode auto](05-claude-code-sandbox-devcontainer.md#mesures-sur-la-configuration-de-référence)) : il ne sort pas non plus. |
 | Télémétrie, rapports d'erreur, mises à jour automatiques | Coupés par `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. |
 | Installation et mise à jour de Claude Code | Téléchargées depuis Anthropic et npm : à faire explicitement (`claude update`). |
 | Contrôle de sécurité de WebFetch | Avant le premier accès à chaque nom d'hôte, il envoie ce nom à `api.anthropic.com`. Le réglage `skipWebFetchPreflight: true` le supprime (n'importe quel fichier de réglages) ; sans contrôle, WebFetch tente n'importe quelle URL : l'accompagner de règles de permission `WebFetch`. |
 | Marketplace officiel de plugins | Son enregistrement automatique, au premier lancement interactif, n'est **pas** couvert par `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` ; le couper avec `CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL=1`, avant ce premier lancement (le désactiver plus tard n'annule rien). |
-| Modèles `:cloud` d'Ollama | Une requête vers un modèle `:cloud` (par erreur de nom, ou demandée par l'agent) ferait sortir le prompt vers ollama.com. La stack fixe `OLLAMA_NO_CLOUD=1` sur le service `ollama` : ces modèles sont refusés localement (mesuré, voir [le tutoriel 2](05-claude-code-sandbox-devcontainer.md#6-vérifications-mesurées)). |
+| Modèles `:cloud` d'Ollama | Une requête vers un modèle `:cloud` (par erreur de nom, ou demandée par l'agent) ferait sortir le prompt vers ollama.com. La stack fixe `OLLAMA_NO_CLOUD=1` sur le service `ollama` : ces modèles sont refusés localement (mesuré, voir [le tutoriel 05](05-claude-code-sandbox-devcontainer.md#6-vérifications-mesurées)). |
 | Recherche web ou outils MCP distants | Dépendent des outils que vous activez, indépendamment du modèle. Non couverts par ce tutoriel. |
 
 ### 3.5 Variante : réglages VS Code uniquement
@@ -238,23 +238,23 @@ Deux messages sur la sortie d'erreur sont **sans conséquence** :
 | Message | Signification |
 |---|---|
 | `[claude-code:unrecognized_model]` | Claude Code ne connaît pas `ornith-code` : même cause que l'avertissement de 3.2. Le message reste affiché : c'est `CLAUDE_CODE_MAX_CONTEXT_TOKENS` qui corrige le comportement, pas le message. |
-| Facturation du classifieur du mode *auto* indisponible via `localhost:11434` | Inoffensif, mais il implique que le classifieur du mode *auto* envoie ses requêtes **au même point d'accès**, donc au même modèle local. Conséquences mesurées : le classifieur expire parfois (« ornith-code is temporarily unavailable (timed out), so auto mode cannot determine the safety of Bash »), et il a **accepté** qu'une commande sandboxée ouvre un domaine externe. Avec un modèle local, préférer le mode manuel ou `acceptEdits` ; voir le [piège du mode auto](05-claude-code-sandbox-devcontainer.md#mesures-sur-cette-machine). |
+| Facturation du classifieur du mode *auto* indisponible via `localhost:11434` | Inoffensif, mais il implique que le classifieur du mode *auto* envoie ses requêtes **au même point d'accès**, donc au même modèle local. Conséquences mesurées : le classifieur expire parfois (« ornith-code is temporarily unavailable (timed out), so auto mode cannot determine the safety of Bash »), et il a **accepté** qu'une commande sandboxée ouvre un domaine externe. Avec un modèle local, préférer le mode manuel ou `acceptEdits` ; voir le [piège du mode auto](05-claude-code-sandbox-devcontainer.md#mesures-sur-la-configuration-de-référence). |
 
 ---
 
-## 5. Conseils d'usage pour un modèle de 9B à ~14 tokens/s
+## 5. Conseils d'usage pour un petit modèle local
 
-La génération plafonne à ~14 tokens/s sur cette machine (voir [`configuration-open-webui.md`](01-configuration-open-webui.md), section 1). Chaque token inutile coûte ~70 ms. Conséquences pour un agent de code :
+La génération plafonne à ~14 tokens/s sur la configuration de référence (voir le [tutoriel 01](01-configuration-open-webui.md), section 1), soit ~70 ms par token inutile. Mesurez le débit de votre machine (tutoriel 01, section 2, étape 7) : les conseils valent tant qu'il reste de l'ordre de quelques dizaines de tokens/s. Conséquences pour un agent de code :
 
 | Conseil | Raison |
 |---|---|
 | Donner des **tâches ciblées**, sur **peu de fichiers** | Chaque fichier lu consomme du contexte, qui est limité à 64k ; au-delà, Claude Code doit compacter l'historique (*auto-compact*). |
 | Éviter les gros dépôts et les demandes vagues (« améliore le projet ») | Le modèle explore, lit beaucoup, et perd le fil. Nommer les fichiers et la commande de vérification. |
 | S'attendre à une **première réponse longue** | Le prompt système de Claude Code est volumineux ; il est lu à ~250 tokens/s avant le premier token généré. Les tours suivants sont plus rapides, tant que le modèle reste chargé. |
-| **Une seule requête à la fois** | La stack tourne avec `OLLAMA_NUM_PARALLEL=1`. Ne pas lancer deux agents en parallèle ; l'extension peut ouvrir plusieurs conversations, mais elles se disputent le même GPU. |
-| Ne pas utiliser Open WebUI ni lancer un workflow n8n **pendant** une session | Même GPU, même file d'attente (voir [`agent-n8n.md`](03-agent-n8n.md), section 5.4). |
-| Le GPU ne garde pas tous les modèles à la fois | Mesuré : `ornith-code` (64k) occupe 6,4 Go, 100 % GPU ; `granite4.2:8b` de n8n (32k) 8,1 Go ; `bge-m3` 664 Mo. Les trois ensemble feraient environ 15,2 Go, à la limite des ~15,8 Go adressables. Avec `OLLAMA_MAX_LOADED_MODELS=2`, charger granite et bge-m3 a **évincé** `ornith-code`. Quand n8n ou Open WebUI tournent, le modèle de code est donc déchargé puis rechargé, et la requête suivante de Claude Code est plus lente. |
-| Vérifier avec `ollama ps` | `docker compose exec ollama ollama ps` doit afficher `100% GPU` pour `ornith-code`. |
+| **Une seule requête à la fois** | La stack tourne avec `OLLAMA_NUM_PARALLEL=1`. Ne pas lancer deux agents en parallèle ; l'extension peut ouvrir plusieurs conversations, mais elles se disputent le même Ollama. |
+| Ne pas utiliser Open WebUI ni lancer un workflow n8n **pendant** une session | Même Ollama, même file d'attente (voir le [tutoriel 03](03-agent-n8n.md), section 5.4). |
+| La mémoire ne garde pas tous les modèles à la fois | Mesuré sur la configuration de référence : `ornith-code` (64k) occupe 6,4 Go, 100 % GPU ; `granite4.2:8b` de n8n (32k) 8,1 Go ; `bge-m3` 664 Mo. Les trois ensemble feraient environ 15,2 Go, à la limite des ~15,8 Go adressables par l'iGPU. Avec `OLLAMA_MAX_LOADED_MODELS=2`, charger granite et bge-m3 a **évincé** `ornith-code`. Quand n8n ou Open WebUI tournent, le modèle de code est donc déchargé puis rechargé, et la requête suivante de Claude Code est plus lente. |
+| Vérifier avec `ollama ps` | Avec un profil GPU, `docker compose exec ollama ollama ps` doit afficher `100% GPU` pour `ornith-code`. Un partage CPU/GPU signifie que la variante 64k ne tient pas en mémoire GPU : voir 6.2. |
 | Utiliser git | L'agent modifie les fichiers du projet. Un `git status` et un `git diff` avant d'accepter ses changements. |
 
 Pour un agent qui exécute des commandes de façon autonome, l'isoler vaut mieux que lui faire confiance : voir [Isoler l'agent de code](05-claude-code-sandbox-devcontainer.md).
@@ -280,8 +280,9 @@ Pour un agent qui exécute des commandes de façon autonome, l'isoler vaut mieux
 | Même symptôme alors que la variable est définie | La session utilise un modèle sans variante 64k (par exemple `ornith:9b`, à 32k par défaut dans cette stack) | `/model` : vérifier que le modèle est `ornith-code`, et `ollama show ornith-code` pour lire `num_ctx`. |
 | Erreur « model not found », ou un modèle d'Anthropic apparaît dans les logs Ollama | Une des variables `ANTHROPIC_DEFAULT_*_MODEL` manque, ou `--model` impose un autre nom | Définir les quatre variables de modèle. `docker compose logs -f ollama` montre le nom demandé. |
 | Le modèle utilisé n'est pas celui attendu | `/model` ou `--model` a pris le pas sur `ANTHROPIC_MODEL` | `/model` pour choisir `ornith-code`. |
-| Première réponse très longue (plusieurs dizaines de secondes) | Prompt système volumineux lu à ~250 tokens/s, et modèle à recharger | Normal. Patienter ; les tours suivants sont plus courts. |
+| Première réponse très longue (plusieurs dizaines de secondes) | Prompt système volumineux (lu à ~250 tokens/s sur la configuration de référence), et modèle à recharger | Normal. Patienter ; les tours suivants sont plus courts. |
 | Chaque première demande après une pause recharge le modèle | Le modèle a été déchargé : `OLLAMA_KEEP_ALIVE` (30 min dans cette stack) est expiré, ou un autre modèle (Open WebUI, n8n) l'a remplacé en mémoire | Reprendre dans les 30 minutes, ou augmenter `OLLAMA_KEEP_ALIVE` dans `docker-compose.yml` (la stack doit être recréée). |
+| `ollama ps` affiche un partage CPU/GPU pour `ornith-code` | La variante 64k ne tient pas dans la mémoire du GPU | Créer une variante à `num_ctx 32768` et régler `CLAUDE_CODE_MAX_CONTEXT_TOKENS` à la même valeur. Claude Code compactera plus souvent l'historique, mais le modèle restera entièrement sur le GPU. |
 | `connection refused` sur `localhost:11434` | Stack arrêtée | `docker compose up -d`, puis `curl -s http://localhost:11434/api/version`. |
 | Le CLI utilise encore l'API d'Anthropic | Le fichier `.claude/settings.local.json` n'est pas dans le dossier de lancement, ou le dossier n'est pas approuvé | Lancer `claude` à la racine du projet ; `/status` pour contrôler l'adresse. |
 | Message `[claude-code:unrecognized_model]` | Modèle inconnu du catalogue | Sans gravité si `CLAUDE_CODE_MAX_CONTEXT_TOKENS` est défini (voir 4.4). |
@@ -300,10 +301,10 @@ Pour un agent qui exécute des commandes de façon autonome, l'isoler vaut mieux
 | Confidentialité | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
 | Vérification | `/status`, `/model`, `ollama ps` |
 
-**Résultat** : sur la tâche d'essai, `ornith-code` passe 3 tests sur 3, en 12 tours et 6 min 51 s depuis le CLI, et en 78 à 114 s dans le dev container (accès direct, puis via la passerelle).
+**Résultat** sur la configuration de référence : sur la tâche d'essai, `ornith-code` passe 3 tests sur 3, en 12 tours et 6 min 51 s depuis le CLI, et en 78 à 114 s dans le dev container (accès direct, puis via la passerelle).
 
 ### Pour aller plus loin
 
 - **Isoler l'agent** : sandbox de commandes et dev container sur réseau interne, dans [Isoler l'agent de code](05-claude-code-sandbox-devcontainer.md).
-- **Régler Ollama et le GPU** : [`configuration-open-webui.md`](01-configuration-open-webui.md), section 1.
-- **Cohabitation avec les workflows n8n** : [`agent-n8n.md`](03-agent-n8n.md), section 5.4.
+- **Régler Ollama et le GPU** : [tutoriel 01](01-configuration-open-webui.md), sections 1 et 2.
+- **Cohabitation avec les workflows n8n** : [tutoriel 03](03-agent-n8n.md), section 5.4.

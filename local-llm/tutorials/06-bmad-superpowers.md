@@ -322,12 +322,12 @@ Les sous-agents de `subagent-driven-development` ont choisi leur modèle selon l
 
 ## 7. Et avec le LLM local (`ornith-code`) ?
 
-Le [tutoriel Claude Code + LLM local](04-claude-code-vscode-local.md) branche Claude Code sur `ornith-code` : un modèle 9B, avec 64k de contexte, sur l'iGPU. La combinaison BMAD + superpowers y est **déconseillée de bout en bout**, et seule une partie est réaliste :
+Le [tutoriel Claude Code + LLM local](04-claude-code-vscode-local.md) branche Claude Code sur `ornith-code` : un modèle 9B, avec 64k de contexte, servi par l'Ollama local. La combinaison BMAD + superpowers y est **déconseillée de bout en bout**, et seule une partie est réaliste :
 
 | Étape | Sur `ornith-code` | Pourquoi |
 |---|---|---|
 | `bmad-spec`, `bmad-ticket`, `bmad-architecture` | Non | Ces skills font de longs dialogues, lisent plusieurs fichiers de référence et lancent un relecteur indépendant. Il faut un modèle capable de raisonner sur l'ensemble. |
-| `subagent-driven-development` | Non | Chaque tâche lance au moins 2 sous-agents. Sur un iGPU qui traite une requête à la fois (`OLLAMA_NUM_PARALLEL=1`), c'est très lent. Et l'exercice du tutoriel 1, beaucoup plus simple, prenait déjà 6 à 7 min sur l'hôte. |
+| `subagent-driven-development` | Non | Chaque tâche lance au moins 2 sous-agents. Sur un Ollama local qui traite une requête à la fois (`OLLAMA_NUM_PARALLEL=1`), c'est très lent. Et l'exercice du tutoriel 04, beaucoup plus simple, prenait déjà 6 à 7 min sur l'hôte de la configuration de référence. |
 | Une story déjà découpée, avec un plan superpowers déjà écrit, exécutée **en ligne** (`superpowers:executing-plans`) en TDD | Possible | Le plan et l'entrée du ticket donnent un contexte court et précis. C'est le cas où un petit modèle s'en sort, comme sur l'exercice du dev container. |
 
 Le compromis proposé : planifier avec Claude (BMAD, puis `writing-plans`), puis exécuter le plan sur `ornith-code`, de préférence dans le [dev container isolé](05-claude-code-sandbox-devcontainer.md). Cette répartition n'a **pas** été mesurée dans ce tutoriel.

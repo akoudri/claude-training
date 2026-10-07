@@ -2,9 +2,9 @@
 
 Ce tutoriel complète [Utiliser Claude Code dans VS Code avec le LLM local](04-claude-code-vscode-local.md). Un agent de code exécute des commandes et modifie des fichiers sur la base de ce que raconte un modèle de 9B : il faut décider **ce qu'il peut toucher**. Deux mécanismes sont décrits, avec ce que chacun isole et ce qu'il laisse passer, puis testés avec le modèle `ornith-code` de la stack de ce dépôt.
 
-- **Machine cible** : celle de [`configuration-open-webui.md`](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan)
+- **Configuration de référence** : les durées citées ont été mesurées sur celle du [tutoriel 01](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan), sous Ubuntu. Le tutoriel fonctionne sur toute machine capable de faire tourner la stack ; seules les durées changent (voir le [tutoriel 01, section 2](01-configuration-open-webui.md#2-premier-démarrage)).
 - **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291, nginx 1.29-alpine (passerelle), image `node:22`, Docker Compose. Le **CLI** et le **panneau de l'extension VS Code** `anthropic.claude-code` ont été testés dans le dev container : ouvert par « Reopen in Container », le panneau s'installe malgré l'absence d'Internet, s'ouvre sans écran de connexion et corrige l'exercice.
-- **Modèle** : `ornith-code` (variante à 64k de `ornith:9b`), créé comme au chapitre 2 du tutoriel précédent
+- **Modèle** : `ornith-code` (variante à 64k de `ornith:9b`), créé comme à la section 2.3 du [tutoriel 04](04-claude-code-vscode-local.md#23-créer-ornith-code)
 - **Fichiers de l'exemple** : [`exemples/claude-code-devcontainer/`](../exemples/claude-code-devcontainer/)
 
 Sources officielles utilisées :
@@ -27,7 +27,7 @@ Sources officielles utilisées :
 | Ce qui est isolé | Rien : l'agent a vos droits d'utilisateur. | Les commandes **Bash** et **Monitor** lancées par Claude, et leurs processus enfants : écritures limitées au projet, réseau via un proxy. | **Tout** le processus Claude Code : commandes, outils de fichiers, MCP, hooks. Il ne voit que l'espace de travail monté et un réseau Docker **interne**, où seule une passerelle vers Ollama est joignable. |
 | Ce qui n'est **pas** isolé | Tout. | Les outils Read, Edit et Write, les serveurs MCP locaux et les hooks, qui tournent hors du sandbox. | Ce qui est monté dans le conteneur (le dépôt, un volume de configuration) et les routes de la passerelle. |
 | Réseau | Libre. | Aucune route directe ; le proxy filtre par nom d'hôte. | Réseau Docker `internal` : aucune route vers Internet, aucun DNS externe ; seule la passerelle vers Ollama répond. |
-| Coût de mise en place | Aucun. | `bubblewrap` et `socat`, éventuellement un profil AppArmor. | Docker, la stack (passerelle comprise) démarrée avant l'ouverture, une image à construire. |
+| Coût de mise en place | Aucun. | Rien sous macOS. Sous Linux et WSL2 : `bubblewrap` et `socat`, éventuellement un profil AppArmor. | Docker, la stack (passerelle comprise) démarrée avant l'ouverture, une image à construire. |
 | À choisir quand | Dépôt de test jetable, sans secret. | Usage quotidien sur vos projets, avec validation des actions. | Agent **autonome** (`--dangerously-skip-permissions`), dépôt tiers, ou besoin d'un cloisonnement réseau strict. |
 
 Les deux se combinent mal sans précaution : le sandbox s'appuie sur `bubblewrap`, qui ne démarre pas dans un conteneur non privilégié (voir 2.7). Dans le dev container de ce tutoriel, **le conteneur est la frontière** et le sandbox n'est pas activé.
@@ -63,9 +63,15 @@ Ce qui **échappe** au sandbox :
 
 Autres limites de la documentation : le proxy décide d'après le **nom d'hôte** demandé et n'inspecte pas le TLS par défaut ; les outils qui ignorent les variables de proxy (`ssh` simple, la plupart des pilotes de base de données) ne peuvent pas se connecter, même à un hôte autorisé ; seul le TCP passe (pas d'UDP, de QUIC ni d'ICMP). La documentation précise que le sandbox « réduit le risque » sans être une frontière d'isolation complète.
 
-### 2.2 Prérequis sous Linux
+### 2.2 Prérequis selon le système
 
-Le sandbox s'appuie sur deux paquets :
+| Système | Prérequis |
+|---|---|
+| macOS | Aucun : le sandbox s'appuie sur Seatbelt, intégré au système. Passer directement à 2.4. |
+| Linux, WSL2 | Les deux paquets ci-dessous. |
+| Windows hors WSL2 | Sandbox non disponible : lancer Claude Code dans WSL2, ou utiliser le dev container de la partie B. |
+
+Sous Linux et WSL2, le sandbox s'appuie sur deux paquets :
 
 | Paquet | Rôle |
 |---|---|
@@ -74,13 +80,15 @@ Le sandbox s'appuie sur deux paquets :
 
 ```bash
 sudo apt-get install bubblewrap socat    # Ubuntu / Debian
+sudo dnf install bubblewrap socat        # Fedora
+sudo pacman -S bubblewrap socat          # Arch
 ```
 
 Le contrôle de dépendances se fait au démarrage : relancer Claude Code après l'installation. Dans `/sandbox`, un onglet **Dependencies** liste ce qui manque ; s'il n'apparaît pas, tout est présent. Le filtre `seccomp` est optionnel (il ajoute le blocage des sockets Unix) : `npm install -g @anthropic-ai/sandbox-runtime`.
 
 ### 2.3 Ubuntu 24.04 et plus : le profil AppArmor
 
-> **Piège rencontré** : sur Ubuntu 24.04 et plus récent, la politique AppArmor par défaut empêche `bwrap` de créer les espaces de noms utilisateur dont il a besoin. Cette machine en avait besoin : sans le profil ci-dessous, le sandbox ne démarre pas.
+> **Piège rencontré** : sur Ubuntu 24.04 et plus récent, la politique AppArmor par défaut empêche `bwrap` de créer les espaces de noms utilisateur dont il a besoin. La machine de référence (Ubuntu) en avait besoin : sans le profil ci-dessous, le sandbox ne démarre pas. Les autres distributions sont rarement concernées, mais la vérification ci-dessous ne coûte rien.
 
 Vérifier d'abord si la restriction est active :
 
@@ -185,10 +193,10 @@ Remarques à connaître :
 - **`denyRead: ["~/"]` peut gêner les outils installés dans le dossier personnel** (gestionnaire de versions de Node, cache npm…). Ce bloc est celui de l'exemple de la documentation ; si une commande échoue en lecture, ajouter le chemin concerné à `allowRead` plutôt que de retirer la règle.
 - **Réglages de dépôt et réglages utilisateur** : la documentation indique qu'un `false` placé dans les réglages utilisateur, `--settings` ou les réglages gérés **l'emporte** sur un `true` du projet. Pour un sandbox qu'un dépôt ne peut pas assouplir, mettre `allowUnsandboxedCommands: false` dans `~/.claude/settings.json` ou passer par `--settings`.
 - **`sandbox.network.strictAllowlist`**, qui refuse tout hôte hors liste au lieu de demander, ne s'accepte que dans les réglages utilisateur ou gérés, ou via `--settings` : un dépôt ne peut pas l'activer.
-- **Le modèle n'a pas besoin d'être dans la liste réseau.** Les requêtes vers Ollama sont émises par le processus Claude Code, pas par une commande Bash. La documentation du sandbox dit que celui-ci couvre **les commandes shell**, que le proxy tourne hors du sandbox et que les outils intégrés suivent les permissions ; elle ne dit **pas** explicitement que les appels de l'API du modèle sont hors sandbox. La mesure ci-dessous le vérifie sur cette machine.
+- **Le modèle n'a pas besoin d'être dans la liste réseau.** Les requêtes vers Ollama sont émises par le processus Claude Code, pas par une commande Bash. La documentation du sandbox dit que celui-ci couvre **les commandes shell**, que le proxy tourne hors du sandbox et que les outils intégrés suivent les permissions ; elle ne dit **pas** explicitement que les appels de l'API du modèle sont hors sandbox. La mesure ci-dessous le vérifie sur la configuration de référence.
 - **Une commande sandboxée n'atteint pas l'Ollama de l'hôte.** Sous Linux, le `localhost` d'une commande sandboxée est privé : `curl http://localhost:11434` depuis Bash n'atteint pas le port de l'hôte. Pour tester l'API, le faire dans un terminal normal.
 
-#### Mesures sur cette machine
+#### Mesures sur la configuration de référence
 
 Test fait sur l'hôte avec `ornith-code`, le bloc ci-dessus (sans `filesystem`) passé par `--settings`, en mode de permissions **auto** (celui de la session). L'agent devait lancer un `curl` vers example.com, écrire dans `~/sandbox-test.txt`, puis corriger l'exercice `slug.js`.
 
@@ -228,13 +236,13 @@ Dans un conteneur non privilégié, `bubblewrap` ne peut pas monter un `/proc` n
 Le dev container fait tourner **tout Claude Code** dans un conteneur qui n'a **aucune route vers Internet**. Il est inspiré du conteneur de référence d'Anthropic, mais l'isolement vient du **réseau Docker**, pas d'un pare-feu dans le conteneur.
 
 ```text
- dev container  --(réseau mcp-simple_agents, internal)-->  ollama-gateway  -->  ollama:11434
+ dev container  --(réseau llm-agents, internal)-->  ollama-gateway  -->  ollama:11434
    (user node)        pas de route Internet, pas de DNS externe   nginx, 3 routes     (réseau default)
 ```
 
 | Élément | Rôle |
 |---|---|
-| Réseau `mcp-simple_agents` | Déclaré `internal: true` dans `docker-compose.yml`. Pas de route vers Internet, pas de résolution DNS de noms externes. Le dev container ne rejoint **que** ce réseau. |
+| Réseau `llm-agents` | Déclaré `internal: true` dans `docker-compose.yml`, avec un nom fixe (`name: llm-agents`). Pas de route vers Internet, pas de résolution DNS de noms externes. Le dev container ne rejoint **que** ce réseau. |
 | Service `ollama-gateway` | nginx 1.29-alpine, sur les réseaux `default` et `agents`. Écoute sur 8080 et transmet vers `ollama:11434` **trois routes seulement**. |
 | `ANTHROPIC_BASE_URL` | `http://ollama-gateway:8080` |
 
@@ -297,7 +305,7 @@ Dossier : `exemples/claude-code-devcontainer/`, plus `ollama-gateway/nginx.conf`
 | Clé | Valeur | Ce que ça implique |
 |---|---|---|
 | `build.dockerfile`, `build.args` | `Dockerfile`, `TZ` (Europe/Paris par défaut), `CLAUDE_CODE_VERSION` = `2.1.291` | Construit l'image. La version est **figée** : le build est reproductible. |
-| `runArgs: --network=mcp-simple_agents` | | Rejoint le réseau interne. **La stack doit tourner avant l'ouverture**, sinon ce réseau n'existe pas. Le nom vient du dossier du projet (4.5). Aucune capacité (`--cap-add`) n'est demandée. |
+| `runArgs: --network=llm-agents` | | Rejoint le réseau interne. **La stack doit tourner avant l'ouverture**, sinon ce réseau n'existe pas. Le nom est fixé dans `docker-compose.yml` (4.5). Aucune capacité (`--cap-add`) n'est demandée. |
 | `customizations.vscode.extensions` | `anthropic.claude-code` | Demande l'installation de l'extension dans le conteneur. Testé : elle s'installe bien, bien que le conteneur n'ait pas Internet. |
 | `customizations.vscode.settings` | `claudeCode.disableLoginPrompt: true` | Pas d'écran de connexion Anthropic dans le panneau de l'extension. |
 | `remoteUser` | `node` | Utilisateur sans privilège ; `sudo` est absent de l'image. |
@@ -313,13 +321,13 @@ Variables du conteneur (`containerEnv`) :
 | `CLAUDE_CONFIG_DIR` | `/home/node/.claude` | Dossier de configuration, placé sur le volume. |
 | `ANTHROPIC_BASE_URL` | `http://ollama-gateway:8080` | La passerelle, sans `/v1`. |
 | `ANTHROPIC_AUTH_TOKEN` | `ollama` | Valeur factice : le conteneur ne détient **aucun** identifiant réel. |
-| `ANTHROPIC_API_KEY` | `""` | Neutralise toute clé réelle (voir le tutoriel 1, 3.3). |
+| `ANTHROPIC_API_KEY` | `""` | Neutralise toute clé réelle (voir le [tutoriel 04](04-claude-code-vscode-local.md#33-pourquoi-anthropic_api_key-est-vide), 3.3). |
 | `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `${localEnv:CLAUDE_LOCAL_MODEL:ornith-code}` | Le modèle local pour tous les alias. Pour en essayer un autre, exporter `CLAUDE_LOCAL_MODEL` **sur l'hôte** avant d'ouvrir le conteneur. |
 | `CLAUDE_CODE_MAX_CONTEXT_TOKENS` | `${localEnv:CLAUDE_LOCAL_CONTEXT:65536}` | Fenêtre réelle de la variante, surchargeable par `CLAUDE_LOCAL_CONTEXT` sur l'hôte. **Indispensable** (voir l'encadré ci-dessous). Si vous changez de modèle avec `CLAUDE_LOCAL_MODEL`, alignez cette valeur sur son `num_ctx`. |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1` | Pas de télémétrie, de rapports d'erreur ni de mise à jour. |
 | `DISABLE_AUTOUPDATER` | `1` | Pas de mise à jour automatique. |
 
-> **Piège rencontré** : Claude Code ne connaît pas `ornith-code` et suppose une fenêtre de 200k tokens. Sans `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, il ne compacte pas à temps et Ollama tronque le prompt en silence. Première exécution dans le dev container **sans** la variable : timeout de 25 min, 0 test sur 3. **Avec** : 3/3 en 78 s (accès direct) puis 114 s (via la passerelle). Détails dans le [tutoriel 1, 3.2](04-claude-code-vscode-local.md#32-le-bloc-env-complet). Le défaut est **65536** ; si `CLAUDE_LOCAL_MODEL` désigne un modèle d'un autre `num_ctx`, exporter aussi `CLAUDE_LOCAL_CONTEXT`.
+> **Piège rencontré** : Claude Code ne connaît pas `ornith-code` et suppose une fenêtre de 200k tokens. Sans `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, il ne compacte pas à temps et Ollama tronque le prompt en silence. Première exécution dans le dev container **sans** la variable : timeout de 25 min, 0 test sur 3. **Avec** : 3/3 en 78 s (accès direct) puis 114 s (via la passerelle). Détails dans le [tutoriel 04, 3.2](04-claude-code-vscode-local.md#32-le-bloc-env-complet). Le défaut est **65536** ; si `CLAUDE_LOCAL_MODEL` désigne un modèle d'un autre `num_ctx`, exporter aussi `CLAUDE_LOCAL_CONTEXT`.
 
 ### 4.2 `Dockerfile`
 
@@ -348,7 +356,7 @@ L'exercice : `slugify` ne gère que les minuscules et les espaces. Les trois tes
 
 ### 4.5 Nom du réseau
 
-Docker Compose nomme le réseau `<dossier du projet>_<réseau>`. Le dépôt s'appelle `mcp-simple` : le réseau est `mcp-simple_agents`, valeur écrite dans `devcontainer.json`. Si le dossier est renommé, voir le tableau de dépannage.
+Par défaut, Docker Compose nomme un réseau `<dossier du projet>_<réseau>` : le nom changerait selon l'endroit où le dépôt est cloné. `docker-compose.yml` lui donne donc un nom fixe (`name: llm-agents`), repris tel quel dans `devcontainer.json`. Si une autre stack de la machine utilise déjà ce nom, changer les deux valeurs ensemble.
 
 ---
 
@@ -357,7 +365,7 @@ Docker Compose nomme le réseau `<dossier du projet>_<réseau>`. Le dépôt s'ap
 ### 5.1 Ouvrir le conteneur
 
 1. Démarrer la stack depuis la racine du dépôt, **passerelle comprise** : `docker compose up -d`. Vérifier que `ollama-gateway` tourne (`docker compose ps`).
-2. Vérifier que le modèle existe : `docker compose exec ollama ollama list` doit montrer `ornith-code`. Sinon, le créer comme au [tutoriel 1, 2.3](04-claude-code-vscode-local.md#23-créer-ornith-code).
+2. Vérifier que le modèle existe : `docker compose exec ollama ollama list` doit montrer `ornith-code`. Sinon, le créer comme au [tutoriel 04, 2.3](04-claude-code-vscode-local.md#23-créer-ornith-code).
 3. Ouvrir **le dossier** `exemples/claude-code-devcontainer` dans VS Code (et non la racine du dépôt).
 4. Palette de commandes : **Dev Containers: Reopen in Container**. La première construction télécharge l'image Node et installe Claude Code (c'est le seul moment où le réseau est utilisé).
 
@@ -444,19 +452,19 @@ Le journal d'accès de la passerelle pendant l'exercice ne montre que `POST /v1/
 
 La passerelle résout le nom `ollama` à chaque requête (`resolver 127.0.0.11` dans `nginx.conf`) : si le conteneur Ollama est recréé et change d'adresse, elle suit sans redémarrage.
 
-Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 78 s. Les durées varient beaucoup d'un essai à l'autre : de 78 à 114 s dans le conteneur, 6 min 51 s pour le CLI sur la machine (voir le tutoriel 1). Le temps d'un seul essai n'est pas représentatif.
+Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 78 s. Les durées varient beaucoup d'un essai à l'autre : de 78 à 114 s dans le conteneur, 6 min 51 s pour le CLI sur l'hôte (voir le tutoriel 04), sur la configuration de référence. Le temps d'un seul essai n'est pas représentatif.
 
 ## 7. Dépannage
 
 | Symptôme | Cause | Remède |
 |---|---|---|
-| Le `postStartCommand` échoue (pas de « passerelle Ollama joignable »), ou le conteneur ne démarre pas faute de réseau | Stack arrêtée, passerelle arrêtée, ou réseau `mcp-simple_agents` absent parce que le dossier du projet a été renommé | `docker compose up -d` depuis la racine, puis `docker compose ps`. `docker network ls` pour lire le nom réel (`<dossier>_agents`), à reporter dans `--network=…` de `runArgs`. |
+| Le `postStartCommand` échoue (pas de « passerelle Ollama joignable »), ou le conteneur ne démarre pas faute de réseau | Stack arrêtée, passerelle arrêtée, ou réseau `llm-agents` absent | `docker compose up -d` depuis `local-llm/`, puis `docker compose ps`. `docker network ls` doit lister `llm-agents`. |
 | Erreur 403 de la passerelle dans un message de Claude Code | Claude Code appelle une route que `nginx.conf` ne transmet pas | Identifier la route (`docker compose logs ollama-gateway`), l'ajouter à `ollama-gateway/nginx.conf` **sur l'hôte**, puis `docker compose restart ollama-gateway`. N'ajouter que le nécessaire (5.3). |
 | Passerelle joignable mais `connection refused` ou 502 | Ollama arrêté ou pas encore prêt | `docker compose ps` : `ollama` doit être *healthy*. |
 | `git push` ou `npm install` échoue dans le conteneur | Normal : le conteneur est hors ligne | Les lancer sur l'hôte (5.4). |
 | `git status` répond « not a git repository » dans le conteneur | `/workspace` ne contient pas le `.git` du dépôt parent | Lancer git sur l'hôte. |
 | Boucle sans fin, 0 test réussi | `CLAUDE_CODE_MAX_CONTEXT_TOKENS` ne correspond pas au `num_ctx` du modèle | Voir l'encadré de 4.1. |
-| Première réponse très lente | Le modèle de code a été évincé de la mémoire GPU par n8n ou Open WebUI | Voir le tutoriel 1, section 5. Patienter ou laisser n8n et Open WebUI au repos. |
+| Première réponse très lente | Le modèle de code a été évincé de la mémoire par n8n ou Open WebUI | Voir le tutoriel 04, section 5. Patienter ou laisser n8n et Open WebUI au repos. |
 | `--dangerously-skip-permissions` refusée | Session en root | Utiliser l'utilisateur `node` (`whoami`). |
 | `touch` ou écriture dans `.devcontainer/` : « Read-only file system » | Voulu : ce dossier est monté en lecture seule | Modifier la configuration **sur l'hôte**, puis reconstruire. |
 | L'extension `anthropic.claude-code` ne s'installe pas dans le conteneur | Ne s'est pas produit lors du test, mais le conteneur n'atteint pas le marketplace : une installation qui en dépendrait échouerait | Lancer `claude` dans le terminal du conteneur (le CLI y est installé et testé). |
@@ -473,7 +481,7 @@ Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 
 | Mode strict | `allowUnsandboxedCommands: false` **et** `failIfUnavailable: true`. |
 | Ce que protège le dev container | Tout le processus Claude Code, sur un réseau Docker `internal` : ni route Internet, ni DNS externe. |
 | Seule sortie | La passerelle `ollama-gateway` : `POST /v1/messages`, `POST /v1/messages/count_tokens`, `GET /api/version`. Le reste : 403. |
-| Réseau du conteneur | `mcp-simple_agents`, `http://ollama-gateway:8080`, Ollama toujours lié à `127.0.0.1` sur l'hôte. |
+| Réseau du conteneur | `llm-agents`, `http://ollama-gateway:8080`, Ollama toujours lié à `127.0.0.1` sur l'hôte. |
 | `.devcontainer/` | Monté en lecture seule : pas d'`initializeCommand` ajouté par l'agent. |
 | Contrepartie | Hors ligne : `git push` et `npm install` se lancent sur l'hôte. |
 | Ce qui reste exposé | L'espace de travail monté (modifications et suppressions directes) : utiliser git sur l'hôte. |
@@ -481,6 +489,6 @@ Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 
 
 ### Pour aller plus loin
 
-- **Configurer Claude Code pour le modèle local** : [tutoriel 1](04-claude-code-vscode-local.md).
-- **Cohabitation avec Open WebUI et n8n** : [`agent-n8n.md`](03-agent-n8n.md), section 5.4 ; une seule requête à la fois sur le GPU.
+- **Configurer Claude Code pour le modèle local** : [tutoriel 04](04-claude-code-vscode-local.md).
+- **Cohabitation avec Open WebUI et n8n** : [tutoriel 03](03-agent-n8n.md), section 5.4 ; une seule requête à la fois dans Ollama.
 - **Comparer les approches d'isolation** : https://code.claude.com/docs/en/sandbox-environments (page citée par la documentation du sandbox, non consultée ici).

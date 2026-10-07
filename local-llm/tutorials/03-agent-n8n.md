@@ -2,8 +2,8 @@
 
 Ce tutoriel décrit le démonstrateur n8n de ce dépôt : il compare un **document analysé** (une proposition) à un **document référentiel** (un cahier des charges ou SOW), exigence par exigence, avec un LLM local. Il produit un rapport en local et envoie par mail une synthèse **pseudonymisée**. Il explique surtout **pourquoi** l'architecture est faite ainsi, et ce qui casse quand on s'en écarte.
 
-- **Machine cible** : celle de `docs/configuration-open-webui.md` (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan)
-- **Modèles** : `granite4.2:8b` (chat, contexte 32k) et `bge-m3` (embeddings, vecteurs de dimension 1024)
+- **Configuration de référence** : les durées citées ont été mesurées sur celle du [tutoriel 01](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan). Le tutoriel fonctionne sur toute machine capable de faire tourner la stack ; seules les durées changent (voir le [tutoriel 01, section 2](01-configuration-open-webui.md#2-premier-démarrage)).
+- **Modèles** : `granite4.2:8b` (chat, contexte 32k) et `bge-m3` (embeddings, vecteurs de dimension 1024). Si `.env` désigne un autre modèle de chat, reporter son nom dans `MODEL` de `n8n/src/constants.mjs`, puis régénérer les workflows (`node n8n/scripts/build.mjs`).
 - **Versions testées** : n8n 2.41.6, Postgres 16 + pgvector
 - **Corpus des exemples** : uniquement le corpus fictif de `n8n/exemples/` (SOW « Projet Héron », proposition du prestataire « Novaltis », 10 exigences dont 2 omissions volontaires)
 
@@ -23,7 +23,7 @@ Deux patterns, qu'il faut savoir choisir.
 
 ### Pourquoi un agent libre échoue ici
 
-Donner au modèle tout le référentiel et lui demander « analyse toutes les exigences avec tes outils » ne fonctionne pas avec un modèle de 8B sur cette machine :
+Donner au modèle tout le référentiel et lui demander « analyse toutes les exigences avec tes outils » ne fonctionne pas avec un modèle de 8B sur une machine grand public (chiffres de la configuration de référence) :
 
 | Contrainte | Conséquence |
 |---|---|
@@ -114,9 +114,9 @@ Les règles du `.gitignore` correspondantes : `documents/*`, `reports/*` et `n8n
 ### 3.1 Démarrer la stack
 
 ```bash
-cp .env.example .env     # puis éditer les secrets
+cp .env.example .env     # puis éditer les secrets et le profil matériel (tutoriel 01, section 2)
 docker compose up -d
-docker compose exec ollama ollama ps   # après un premier appel : "100% GPU"
+docker compose exec ollama ollama ps   # après un premier appel : "100% GPU" avec un profil GPU
 ```
 
 Ouvrir http://localhost:5678 et créer le compte propriétaire.
@@ -320,6 +320,8 @@ Les noms sont ceux de `documents/`, **exactement** (espaces, tiret long, accent 
 Sans navigateur, le workflow « 91 – Test analyse » lance la même analyse sur le corpus fictif.
 
 ### 5.3 Durées mesurées
+
+Mesures de la configuration de référence ; elles varient comme la vitesse de génération de votre machine (tutoriel 01, section 2, étape 7).
 
 | Mesure | Valeur |
 |---|---|
@@ -528,8 +530,8 @@ Aucun repli n'a donc été appliqué.
 | **Ingestion interrompue** | Le `DROP TABLE` du workflow 01 s'exécute **avant** la lecture des fichiers. Une ingestion qui échoue laisse l'index vide ou partiel : relancer le workflow. |
 | **Signature du mail d'échec** | Elle indique « Rapport complet : dossier reports/ », alors qu'aucun rapport n'est écrit en cas d'échec. |
 | **Collision de nom de rapport** | Le nom est à la minute (`…-HHMM.md`) : deux analyses terminées dans la même minute s'écrasent. |
-| **Qualité d'extraction des PDF** | Les tableaux sont aplatis, les en-têtes et pieds de page polluent les extraits, et un acteur peut être attribué au mauvais rôle. Même constat que dans `docs/configuration-open-webui.md` (section 6.2) : préférer le DOCX. |
-| **Débit** | ~14 tokens/s : traitement de fond, pas conversationnel. Une analyse bloque Open WebUI (section 5.4). |
+| **Qualité d'extraction des PDF** | Les tableaux sont aplatis, les en-têtes et pieds de page polluent les extraits, et un acteur peut être attribué au mauvais rôle. Même constat que dans le [tutoriel 01](01-configuration-open-webui.md#62-choisir-le-bon-format-de-fichier) (section 6.2) : préférer le DOCX. |
+| **Débit** | ~14 tokens/s sur la configuration de référence : traitement de fond, pas conversationnel. Une analyse bloque Open WebUI (section 5.4). |
 | **Contrôle de confidentialité** | Limité aux termes du dictionnaire (section 8.2). |
 
 ### 9.3 Hors périmètre de cette version
