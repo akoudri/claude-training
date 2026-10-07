@@ -1,0 +1,127 @@
+{
+  "id": "cnfAlerteEchec04",
+  "name": "04 – Alerte d'échec",
+  "active": false,
+  "nodes": [
+    {
+      "id": "23e7415b-3ce6-04bd-91b4-53696363eda4",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -280
+      ],
+      "parameters": {
+        "content": "## Alerte d'échec\n\nDéclaré comme *workflow d'erreur* des autres workflows : n8n l'exécute quand l'un d'eux s'arrête sur une erreur non prévue (exécutions de production uniquement).\n\nLe mail ne contient **que** le nom du workflow, l'étape et l'heure. Le message d'erreur peut contenir des extraits de documents confidentiels : il reste dans l'historique de n8n.",
+        "width": 620,
+        "height": 240
+      }
+    },
+    {
+      "id": "aaa06b18-6f98-6089-696b-a404ef9248e1",
+      "name": "Erreur",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "1d1607f5-d416-dded-5730-55ca01de0942",
+      "name": "Lire la notification",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/config/notification.json",
+        "options": {}
+      }
+    },
+    {
+      "id": "b44347f6-9ffb-338b-e818-965337dc625b",
+      "name": "Décoder la notification",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "destinationKey": "notification",
+        "options": {}
+      }
+    },
+    {
+      "id": "111782aa-ea64-e87f-e537-12df47cc358a",
+      "name": "Envoyer l'alerte",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "fromEmail": "={{ $json.notification.expediteur }}",
+        "toEmail": "={{ $json.notification.destinataire }}",
+        "subject": "={{ '[n8n] Échec – ' + $('Erreur').item.json.workflow.name }}",
+        "emailFormat": "text",
+        "text": "={{ 'Le workflow « ' + $('Erreur').item.json.workflow.name + ' » a échoué à l\\'étape « ' + ($('Erreur').item.json.execution.lastNodeExecuted || 'inconnue') + ' » le ' + $now.toFormat('dd/MM/yyyy HH:mm') + '.\\n\\nDétail : historique des exécutions de n8n (exécution ' + ($('Erreur').item.json.execution.id || '?') + ').' }}",
+        "options": {}
+      },
+      "credentials": {
+        "smtp": {
+          "name": "Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Erreur": {
+      "main": [
+        [
+          {
+            "node": "Lire la notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la notification": {
+      "main": [
+        [
+          {
+            "node": "Décoder la notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décoder la notification": {
+      "main": [
+        [
+          {
+            "node": "Envoyer l'alerte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

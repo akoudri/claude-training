@@ -1,0 +1,212 @@
+{
+  "id": "cnfSynthese00003",
+  "name": "03 – Synthèse et envoi",
+  "active": false,
+  "nodes": [
+    {
+      "id": "d03db772-16ce-be56-d170-8a133fffa715",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -320
+      ],
+      "parameters": {
+        "content": "## Synthèse pseudonymisée\n\n1. Les intitulés sont pseudonymisés avec le dictionnaire `n8n/config/sensitive-terms.json` (remplacement déterministe, pas de LLM).\n\n2. **Contrôle bloquant** : si un terme du dictionnaire subsiste, ou si le dictionnaire manque, le mail est réduit aux statistiques.\n\n3. Justifications, citations et noms de documents ne sortent **jamais** de la machine.",
+        "width": 760,
+        "height": 260
+      }
+    },
+    {
+      "id": "ae104161-45a9-f2d6-589d-1ffc9a697c64",
+      "name": "Entrée",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "03f6abbb-9dc6-cb71-0c68-1be53e385830",
+      "name": "Lire le dictionnaire",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/config/sensitive-terms.json",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "20a1c696-2b5e-49c0-3831-d01282c49e0c",
+      "name": "Décoder le dictionnaire",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "destinationKey": "dictionnaire",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "55da818b-b931-d9e6-d451-6b88f6144548",
+      "name": "Lire la notification",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/config/notification.json",
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "3717c05c-30a9-ce04-6fad-ebdd26609d92",
+      "name": "Décoder la notification",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "operation": "fromJson",
+        "binaryPropertyName": "data",
+        "destinationKey": "notification",
+        "options": {}
+      }
+    },
+    {
+      "id": "065dbe39-4841-ba51-3462-9b9e4ccdd5e1",
+      "name": "Composer le mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Pseudonymisation déterministe des textes qui quittent la machine.\n// Ce fichier est testé avec `node --test` et embarqué tel quel dans les nœuds Code de n8n\n// (voir n8n/src/builder.mjs, libCode).\n\nconst WORD_CHAR = /[\\p{L}\\p{N}]/u;\n\nfunction normalize(text) {\n  return String(text)\n    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/[\\s\\u002D\\u2010-\\u2015\\u2212]/gu, ' ')\n    .replace(/['\\u2018\\u2019\\u02BC\\u0060\\u00B4]/gu, \"'\");\n}\n\nfunction skeleton(text) {\n  return normalize(text).replace(/[^\\p{L}\\p{N}]+/gu, '');\n}\n\n// Texte normalisé, et pour chaque caractère normalisé sa position dans le texte d'origine.\nfunction buildIndex(text) {\n  let norm = '';\n  const map = [];\n  let pos = 0;\n  for (const char of Array.from(text)) {\n    const n = normalize(char);\n    for (let k = 0; k < n.length; k++) map.push(pos);\n    norm += n;\n    pos += char.length;\n  }\n  map.push(pos);\n  return { norm, map };\n}\n\nfunction findOccurrences(text, term, wholeWord) {\n  const source = String(text ?? '');\n  const needle = normalize(term ?? '').trim();\n  if (!needle) return [];\n  const { norm, map } = buildIndex(source);\n  const found = [];\n  let from = 0;\n  for (;;) {\n    const start = norm.indexOf(needle, from);\n    if (start === -1) break;\n    const end = start + needle.length;\n    const before = start === 0 || !WORD_CHAR.test(norm[start - 1]);\n    const after = end === norm.length || !WORD_CHAR.test(norm[end]);\n    if (!wholeWord || (before && after)) found.push([map[start], map[end]]);\n    from = start + 1;\n  }\n  return found;\n}\n\nfunction maskContacts(text) {\n  return String(text)\n    .replace(/\\bhttps?:\\/\\/[^\\s)>\\]]+|\\bwww\\.[^\\s)>\\]]+/gi, '[URL]')\n    .replace(/[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)+/gu, '[EMAIL]');\n}\n\nfunction loadTerms(raw) {\n  let data = raw;\n  if (typeof raw === 'string') {\n    try {\n      data = JSON.parse(raw);\n    } catch {\n      return { ok: false, termes: [], erreur: 'dictionnaire illisible' };\n    }\n  }\n  if (!data || !Array.isArray(data.termes)) return { ok: false, termes: [], erreur: 'dictionnaire indisponible' };\n  if (data.termes.length === 0) return { ok: false, termes: [], erreur: 'dictionnaire vide' };\n  // Une entrée mal formée invalide tout le dictionnaire : l'ignorer laisserait passer un terme.\n  const valide = (t) => t && typeof t.terme === 'string' && normalize(t.terme).trim() && typeof t.remplacement === 'string';\n  if (!data.termes.every(valide)) return { ok: false, termes: [], erreur: 'dictionnaire invalide' };\n  return { ok: true, termes: data.termes, erreur: null };\n}\n\nfunction pseudonymize(text, termes) {\n  // Contacts masqués d'abord : sinon un terme remplacé dans « x@novaltis.example »\n  // casserait l'adresse et elle ne serait plus reconnue.\n  const source = maskContacts(String(text ?? ''));\n  const ordered = [...termes].sort((a, b) => normalize(b.terme).trim().length - normalize(a.terme).trim().length);\n  // Un seul passage sur le texte d'origine : un remplacement n'est jamais retraité.\n  const taken = [];\n  for (const t of ordered) {\n    for (const [start, end] of findOccurrences(source, t.terme, true)) {\n      if (taken.some(([s, e]) => start < e && s < end)) continue;\n      taken.push([start, end, t.remplacement]);\n    }\n  }\n  taken.sort((a, b) => a[0] - b[0]);\n  let out = '';\n  let last = 0;\n  for (const [start, end, remplacement] of taken) {\n    out += source.slice(last, start) + remplacement;\n    last = end;\n  }\n  return out + source.slice(last);\n}\n\n// Contrôle strict : avec squelettes (lettres et chiffres uniquement), pour attraper « AcmeCorp », « Acme-Défense », « Acme  Défense ».\nfunction countResidual(text, termes) {\n  const textSkeleton = skeleton(text);\n  let count = 0;\n  for (const t of termes) {\n    const termSkeleton = skeleton(t.terme);\n    if (!termSkeleton) continue; // skip empty skeletons\n    let from = 0;\n    for (;;) {\n      const idx = textSkeleton.indexOf(termSkeleton, from);\n      if (idx === -1) break;\n      count += 1;\n      from = idx + 1; // allow overlapping\n    }\n  }\n  return count;\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { normalize, findOccurrences, maskContacts, loadTerms, pseudonymize, countResidual, skeleton };\n}\n\n// Statistiques, rapport Markdown local et composition du mail de synthèse.\n// Embarqué dans n8n après pseudonymize.js : les fonctions de ce dernier y sont alors déjà définies.\n\nconst libPseudo = typeof pseudonymize === 'function' ? { pseudonymize, countResidual } : require('./pseudonymize');\n\nconst STATUTS = ['couverte', 'partielle', 'non_couverte', 'indeterminee'];\nconst LIBELLES = { couverte: 'Couverte', partielle: 'Partielle', non_couverte: 'Non couverte', indeterminee: 'Indéterminée' };\n\nconst MAX_EXIGENCES = 25;\n// Longueur max d'un intitulé dans le mail, appliquée APRÈS pseudonymisation : couper avant\n// pourrait laisser un fragment de terme sensible que ni le remplacement ni le contrôle ne reconnaissent.\nconst MAX_INTITULE = 120;\n\n// Motif d'échec : uniquement des comptes, jamais de nom de document (les noms portent des références hors dictionnaire).\nfunction missingDocsMotif(manquants, indexes) {\n  return `Document(s) demandé(s) non indexé(s) : ${manquants.length}. Documents indexés : ${indexes.length}. Détail dans l'historique d'exécution n8n.`;\n}\n\n// Ligne d'avertissement (nombres seuls) quand la liste d'exigences a été tronquée ; null sinon.\nfunction truncationNote(extraites) {\n  return Number(extraites) > MAX_EXIGENCES\n    ? `${extraites} exigences extraites, seules les ${MAX_EXIGENCES} premières ont été analysées.`\n    : null;\n}\n\nfunction pad(n) {\n  return String(n).padStart(2, '0');\n}\n\nfunction formatDateLabel(date) {\n  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;\n}\n\nfunction reportFileName(date) {\n  return `conformite-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.md`;\n}\n\nfunction formatDuration(ms) {\n  const s = Math.max(0, Math.round(ms / 1000));\n  return `${Math.floor(s / 60)} min ${pad(s % 60)} s`;\n}\n\nfunction computeStats(lignes) {\n  const stats = { total: lignes.length, couverte: 0, partielle: 0, non_couverte: 0, indeterminee: 0 };\n  for (const l of lignes) stats[STATUTS.includes(l.statut) ? l.statut : 'indeterminee'] += 1;\n  return stats;\n}\n\nfunction cell(text) {\n  return String(text ?? '').replace(/\\|/g, '\\\\|').replace(/\\s*\\n\\s*/g, ' ').trim();\n}\n\nfunction buildReport({ referentiel, analyse, debut, fin, lignes, extraites }) {\n  const stats = computeStats(lignes);\n  const troncature = truncationNote(extraites);\n  const out = [\n    '# Rapport de conformité',\n    '',\n    `- **Document référentiel** : ${referentiel}`,\n    `- **Document analysé** : ${analyse}`,\n    `- **Date** : ${formatDateLabel(fin)}`,\n    `- **Durée** : ${formatDuration(fin - debut)}`,\n    '',\n    ...(troncature ? [`> ⚠️ ${troncature}`, ''] : []),\n    '## Synthèse',\n    '',\n    '| Statut | Nombre |',\n    '|---|---|',\n    ...STATUTS.map((s) => `| ${LIBELLES[s]} | ${stats[s]} |`),\n    `| **Total** | **${stats.total}** |`,\n    '',\n    '## Tableau de conformité',\n    '',\n    '| ID | Type | Intitulé | Statut | Justification |',\n    '|---|---|---|---|---|',\n    ...lignes.map((l) => `| ${cell(l.id)} | ${cell(l.type)} | ${cell(l.intitule)} | ${l.statut} | ${cell(l.justification)} |`),\n    '',\n    '## Citations',\n    '',\n  ];\n  for (const l of lignes) {\n    out.push(`### ${cell(l.id)} — ${cell(l.intitule)}`, '');\n    if (l.citations.length === 0) out.push('_Aucune citation._');\n    for (const c of l.citations) out.push(`- [${cell(c.source)}] « ${cell(c.extrait)} »`);\n    out.push('');\n  }\n  return out.join('\\n');\n}\n\nfunction statsLines(stats, extraites) {\n  const troncature = truncationNote(extraites);\n  return [`Exigences analysées : ${stats.total}`, ...(troncature ? [troncature] : []), ...STATUTS.map((s) => `- ${LIBELLES[s]} : ${stats[s]}`)];\n}\n\nconst SIGNATURE = ['', 'Rapport complet : dossier reports/ de la machine locale.'];\n\nfunction buildMail({ mode, motif, statistiques, lignes = [], dict, dateLabel, extraites }) {\n  if (mode === 'echec') {\n    let detail = 'motif non communiqué (dictionnaire indisponible).';\n    if (dict.ok) {\n      const texte = libPseudo.pseudonymize(motif || 'non précisé', dict.termes);\n      detail = libPseudo.countResidual(texte, dict.termes) === 0 ? texte : 'motif retiré (occurrences sensibles résiduelles).';\n    }\n    return {\n      subject: `[n8n] Analyse de conformité – ${dateLabel} – échec`,\n      text: [\"L'analyse de conformité a échoué.\", '', `Motif : ${detail}`, ...SIGNATURE].join('\\n'),\n      detail: 'echec',\n    };\n  }\n  const subject = `[n8n] Analyse de conformité – ${dateLabel} – ${statistiques.couverte}/${statistiques.total} couvertes`;\n  const base = [\"Résultat de l'analyse de conformité\", '', ...statsLines(statistiques, extraites)];\n  const reduit = (raison) => ({ subject, text: [...base, '', `Synthèse détaillée retirée : ${raison}.`, ...SIGNATURE].join('\\n'), detail: 'statistiques' });\n  if (!dict.ok) return reduit(dict.erreur);\n  const pseudo = lignes.map((l) => ({\n    id: libPseudo.pseudonymize(String(l.id ?? '').replace(/\\s+/g, ' ').trim(), dict.termes),\n    statut: LIBELLES[l.statut] ?? LIBELLES.indeterminee,\n    intitule: libPseudo.pseudonymize(String(l.intitule ?? '').replace(/\\s+/g, ' ').trim(), dict.termes),\n  }));\n  // Contrôle sur les intitulés complets, AVANT la coupure : un terme résiduel coupé en deux\n  // échapperait sinon au contrôle.\n  const residuel = libPseudo.countResidual(pseudo.map((l) => `${l.id} | ${l.statut} | ${l.intitule}`).join('\\n'), dict.termes);\n  if (residuel > 0) return reduit(`${residuel} occurrence(s) sensible(s) résiduelle(s)`);\n  const tableau = pseudo.map((l) => `${l.id} | ${l.statut} | ${l.intitule.slice(0, MAX_INTITULE)}`);\n  return { subject, text: [...base, '', 'ID | Statut | Intitulé', ...tableau, ...SIGNATURE].join('\\n'), detail: 'complet' };\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { STATUTS, MAX_EXIGENCES, MAX_INTITULE, missingDocsMotif, truncationNote, computeStats, formatDateLabel, reportFileName, buildReport, buildMail };\n}\n\n// ---- Code propre au nœud ----\n\nconst entree = $('Entrée').first().json;\nlet brut = null;\ntry {\n  brut = $('Décoder le dictionnaire').first().json.dictionnaire ?? null;\n} catch (e) {\n  brut = null;\n}\nconst dict = loadTerms(brut);\nconst notification = $('Décoder la notification').first().json.notification ?? {};\nif (!notification.destinataire || !notification.expediteur) {\n  throw new Error('notification.json incomplet : champs destinataire et expediteur requis.');\n}\nconst mail = buildMail({\n  mode: entree.mode,\n  motif: entree.motif,\n  statistiques: entree.statistiques,\n  lignes: entree.lignes ?? [],\n  extraites: entree.extraites,\n  dict,\n  dateLabel: formatDateLabel(new Date(entree.horodatage ?? Date.now())),\n});\nreturn [{ json: { ...mail, destinataire: notification.destinataire, expediteur: notification.expediteur } }];\n"
+      }
+    },
+    {
+      "id": "4e1a058c-61be-af14-6d31-f00bad10fda7",
+      "name": "Envoyer",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "fromEmail": "={{ $json.expediteur }}",
+        "toEmail": "={{ $json.destinataire }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "credentials": {
+        "smtp": {
+          "name": "Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Entrée": {
+      "main": [
+        [
+          {
+            "node": "Lire le dictionnaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire le dictionnaire": {
+      "main": [
+        [
+          {
+            "node": "Décoder le dictionnaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décoder le dictionnaire": {
+      "main": [
+        [
+          {
+            "node": "Lire la notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la notification": {
+      "main": [
+        [
+          {
+            "node": "Décoder la notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décoder la notification": {
+      "main": [
+        [
+          {
+            "node": "Composer le mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Composer le mail": {
+      "main": [
+        [
+          {
+            "node": "Envoyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "cnfAlerteEchec04"
+  },
+  "pinData": {},
+  "tags": []
+}

@@ -1,0 +1,105 @@
+{
+  "id": "cnfTestAnaly0091",
+  "name": "91 – Test analyse",
+  "active": false,
+  "nodes": [
+    {
+      "id": "75adf631-5d06-7bc6-be9e-f37ebf85bde6",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -260
+      ],
+      "parameters": {
+        "content": "## Test du workflow 02 sur le corpus fictif\n\nPuis : `node n8n/scripts/evaluate-report.mjs reports/<dernier rapport>`.",
+        "width": 560,
+        "height": 180
+      }
+    },
+    {
+      "id": "048e12d5-05e0-c77d-f820-060f4575c06a",
+      "name": "Démarrer",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "530e5c89-4791-7102-bc77-199b664fdb08",
+      "name": "Documents de test",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { referentiel: 'sow-exemple.md', analyse: 'Proposition – Projet Héron, v2.md' } }];"
+      }
+    },
+    {
+      "id": "fd97c4e6-ea95-67ed-ab2f-3adbc95738ec",
+      "name": "Analyser",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "cnfAnalyse000002",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Démarrer": {
+      "main": [
+        [
+          {
+            "node": "Documents de test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Documents de test": {
+      "main": [
+        [
+          {
+            "node": "Analyser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

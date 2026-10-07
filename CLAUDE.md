@@ -1,0 +1,29 @@
+# Formation Claude Code — Janus Academy
+
+Dépôt du formateur : support, labs et démos de la formation Claude Code (6 modules, M1 à M6).
+Tout le contenu est rédigé en français.
+
+## Contenu
+
+- `Formation Claude.pdf` : support de cours.
+- `labs/` : énoncés des labs M1 à M6 et `README.md` pour les apprenants.
+- `argos/` : application fil rouge (Node 22.13+, Express, `node:sqlite`, React/Vite, Vitest), dans son état de départ.
+  Les apprenants la clonent séparément. Elle n'a volontairement pas de `CLAUDE.md` : le lab M2 le fait créer.
+- `argos-marketplace/` : marketplace de démonstration (plugin `argos-toolkit@janus-argos`), extension du lab M2.
+- `mcp/` : démos de serveurs MCP en Python (uv). `server.py` (bloc-notes NotesRapides), `blender_mcp_server.py` + `blender_server.py` (pont Claude Code → Blender, TCP 9876).
+- `local-llm/` : stack LLM locale (Ollama sur iGPU, Open WebUI, n8n, pgvector, passerelle nginx) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
+- `local/` : matériel formateur (guide, bundles Argos, labs originaux, script de correction du support). Exclu de git.
+
+## Commandes
+
+- Argos : `cd argos && npm install && npm test`
+- Agent n8n : `cd local-llm && node --test 'n8n/test/*.test.*'` ; build des workflows : `node n8n/scripts/build.mjs` ; déploiement : `n8n/scripts/deploy.sh`
+- MCP : `cd mcp && uv sync`
+
+## Règles
+
+- Ne jamais versionner de secrets ni de données locales : `local-llm/.env`, `local-llm/n8n/config/*` (seuls les `*.example.json` sont suivis), `local-llm/documents/`, `local-llm/reports/`, `mcp/notes.json`. Vérifier le `.gitignore` à chaque nouvel ajout.
+- Les workflows de `local-llm/n8n/workflows/` sont générés par `build.mjs` à partir de `n8n/src/` : modifier les sources, pas le JSON. Ils ne doivent contenir aucun identifiant d'instance n8n.
+- Pas de chemins absolus propres à la machine dans les README et les tutoriels.
+- Garder labs, support, errata et état d'Argos cohérents entre eux.
+- Commits au format Conventional Commits.

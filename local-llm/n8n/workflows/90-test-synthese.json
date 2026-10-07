@@ -1,0 +1,170 @@
+{
+  "id": "cnfTestSynth0090",
+  "name": "90 – Test synthèse",
+  "active": false,
+  "nodes": [
+    {
+      "id": "7ae72ad0-1c1a-a57e-1f03-ca69ec0cbe7a",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -320
+      ],
+      "parameters": {
+        "content": "## Test du workflow 03\n\nCas 1 : le contrôle passe, le mail contient le tableau pseudonymisé.\n\nCas 2 : « AcmeCorp » n’est pas remplacé (limite de mot) mais le contrôle strict le détecte : mail réduit aux statistiques.\n\nCas 3 : relancer après avoir renommé `n8n/config/sensitive-terms.json` : les deux mails sont réduits (« dictionnaire indisponible »).",
+        "width": 760,
+        "height": 260
+      }
+    },
+    {
+      "id": "f68fe20e-07bd-8cc9-bee9-e0db167e316b",
+      "name": "Démarrer",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "11f64bfe-02e3-5120-5967-9d43de47bd9d",
+      "name": "Cas 1 : contrôle OK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: {\n  mode: 'succes', motif: null, horodatage: new Date().toISOString(),\n  statistiques: { total: 3, couverte: 1, partielle: 1, non_couverte: 1, indeterminee: 0 },\n  lignes: [\n    { id: 'EX-01', intitule: 'Inventaire des modèles pour Acme Défense', statut: 'couverte' },\n    { id: 'EX-04', intitule: 'Formation dispensée par Novaltis', statut: 'partielle' },\n    { id: 'EX-09', intitule: 'Support (contact : jeanne.martin@novaltis.example)', statut: 'non_couverte' },\n  ],\n} }];"
+      }
+    },
+    {
+      "id": "ff2ef96e-15c5-2f3d-b451-ab66e0b20ac2",
+      "name": "Envoyer le cas 1",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "cnfSynthese00003",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "fdaeacf0-76e5-6a49-4563-16e00eeb2334",
+      "name": "Cas 2 : terme résiduel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: {\n  mode: 'succes', motif: null, horodatage: new Date().toISOString(),\n  statistiques: { total: 1, couverte: 1, partielle: 0, non_couverte: 0, indeterminee: 0 },\n  lignes: [{ id: 'EX-01', intitule: 'Intégration AcmeCorp', statut: 'couverte' }],\n} }];"
+      }
+    },
+    {
+      "id": "627c1dfb-ce68-16d1-04d7-ff5b5f80d104",
+      "name": "Envoyer le cas 2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "cnfSynthese00003",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Démarrer": {
+      "main": [
+        [
+          {
+            "node": "Cas 1 : contrôle OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cas 1 : contrôle OK": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le cas 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer le cas 1": {
+      "main": [
+        [
+          {
+            "node": "Cas 2 : terme résiduel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cas 2 : terme résiduel": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le cas 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

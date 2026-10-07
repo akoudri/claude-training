@@ -1,0 +1,895 @@
+{
+  "id": "cnfAnalyse000002",
+  "name": "02 – Analyse de conformité",
+  "active": false,
+  "nodes": [
+    {
+      "id": "6474573f-9a0c-6d99-8a9b-7de54c70c30e",
+      "name": "Note workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -340
+      ],
+      "parameters": {
+        "content": "## Partie « workflow » : les étapes sont fixées\n\nValidation des documents → reconstitution du référentiel → **extraction des exigences** en un seul appel au LLM (le document entier tient dans le contexte : plus fiable qu'une recherche).",
+        "width": 1100,
+        "height": 220
+      }
+    },
+    {
+      "id": "641d5973-a96f-7ddf-a0e5-224185f70d4d",
+      "name": "Note agent",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        -340
+      ],
+      "parameters": {
+        "content": "## Partie « agent » : le LLM décide\n\nPour **chaque** exigence, un agent choisit ses recherches (3 au maximum) dans la proposition ou dans le corpus, puis rend un verdict structuré. La tâche est courte et bornée : à la portée d'un modèle de 8B.\n\nOuvrir une exécution et cliquer sur le nœud *Analyser l’exigence* pour voir chaque appel d’outil.",
+        "width": 900,
+        "height": 240
+      }
+    },
+    {
+      "id": "6fea8019-ca87-da99-58df-58ff56230a7b",
+      "name": "Note rapport",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2600,
+        -340
+      ],
+      "parameters": {
+        "content": "## Rapport et synthèse\n\nLe rapport complet reste dans `reports/`. Le workflow 03 envoie une synthèse pseudonymisée.\n\nRègle contrôlée en code : un verdict « couverte » sans citation du document analysé devient « indeterminee ».",
+        "width": 760,
+        "height": 220
+      }
+    },
+    {
+      "id": "108545cf-bea8-4a1e-04e2-9b7483330a48",
+      "name": "Entrée",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "803509c2-99ca-3812-93f4-d87612c6515a",
+      "name": "Initialiser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const p = $input.first().json;\nconst referentiel = String(p.referentiel ?? p['Document référentiel'] ?? '').trim();\nconst analyse = String(p.analyse ?? p['Document analysé'] ?? '').trim();\nreturn [{ json: { referentiel, analyse, debut: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "94677bb3-fbf7-5bef-1e3a-478bfa92787b",
+      "name": "Documents indexés",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT metadata->>'source' AS source FROM n8n_vectors ORDER BY 1;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "1a4cb1a6-950b-d248-eb5e-526811eaefd7",
+      "name": "Vérifier les documents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Pseudonymisation déterministe des textes qui quittent la machine.\n// Ce fichier est testé avec `node --test` et embarqué tel quel dans les nœuds Code de n8n\n// (voir n8n/src/builder.mjs, libCode).\n\nconst WORD_CHAR = /[\\p{L}\\p{N}]/u;\n\nfunction normalize(text) {\n  return String(text)\n    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/[\\s\\u002D\\u2010-\\u2015\\u2212]/gu, ' ')\n    .replace(/['\\u2018\\u2019\\u02BC\\u0060\\u00B4]/gu, \"'\");\n}\n\nfunction skeleton(text) {\n  return normalize(text).replace(/[^\\p{L}\\p{N}]+/gu, '');\n}\n\n// Texte normalisé, et pour chaque caractère normalisé sa position dans le texte d'origine.\nfunction buildIndex(text) {\n  let norm = '';\n  const map = [];\n  let pos = 0;\n  for (const char of Array.from(text)) {\n    const n = normalize(char);\n    for (let k = 0; k < n.length; k++) map.push(pos);\n    norm += n;\n    pos += char.length;\n  }\n  map.push(pos);\n  return { norm, map };\n}\n\nfunction findOccurrences(text, term, wholeWord) {\n  const source = String(text ?? '');\n  const needle = normalize(term ?? '').trim();\n  if (!needle) return [];\n  const { norm, map } = buildIndex(source);\n  const found = [];\n  let from = 0;\n  for (;;) {\n    const start = norm.indexOf(needle, from);\n    if (start === -1) break;\n    const end = start + needle.length;\n    const before = start === 0 || !WORD_CHAR.test(norm[start - 1]);\n    const after = end === norm.length || !WORD_CHAR.test(norm[end]);\n    if (!wholeWord || (before && after)) found.push([map[start], map[end]]);\n    from = start + 1;\n  }\n  return found;\n}\n\nfunction maskContacts(text) {\n  return String(text)\n    .replace(/\\bhttps?:\\/\\/[^\\s)>\\]]+|\\bwww\\.[^\\s)>\\]]+/gi, '[URL]')\n    .replace(/[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)+/gu, '[EMAIL]');\n}\n\nfunction loadTerms(raw) {\n  let data = raw;\n  if (typeof raw === 'string') {\n    try {\n      data = JSON.parse(raw);\n    } catch {\n      return { ok: false, termes: [], erreur: 'dictionnaire illisible' };\n    }\n  }\n  if (!data || !Array.isArray(data.termes)) return { ok: false, termes: [], erreur: 'dictionnaire indisponible' };\n  if (data.termes.length === 0) return { ok: false, termes: [], erreur: 'dictionnaire vide' };\n  // Une entrée mal formée invalide tout le dictionnaire : l'ignorer laisserait passer un terme.\n  const valide = (t) => t && typeof t.terme === 'string' && normalize(t.terme).trim() && typeof t.remplacement === 'string';\n  if (!data.termes.every(valide)) return { ok: false, termes: [], erreur: 'dictionnaire invalide' };\n  return { ok: true, termes: data.termes, erreur: null };\n}\n\nfunction pseudonymize(text, termes) {\n  // Contacts masqués d'abord : sinon un terme remplacé dans « x@novaltis.example »\n  // casserait l'adresse et elle ne serait plus reconnue.\n  const source = maskContacts(String(text ?? ''));\n  const ordered = [...termes].sort((a, b) => normalize(b.terme).trim().length - normalize(a.terme).trim().length);\n  // Un seul passage sur le texte d'origine : un remplacement n'est jamais retraité.\n  const taken = [];\n  for (const t of ordered) {\n    for (const [start, end] of findOccurrences(source, t.terme, true)) {\n      if (taken.some(([s, e]) => start < e && s < end)) continue;\n      taken.push([start, end, t.remplacement]);\n    }\n  }\n  taken.sort((a, b) => a[0] - b[0]);\n  let out = '';\n  let last = 0;\n  for (const [start, end, remplacement] of taken) {\n    out += source.slice(last, start) + remplacement;\n    last = end;\n  }\n  return out + source.slice(last);\n}\n\n// Contrôle strict : avec squelettes (lettres et chiffres uniquement), pour attraper « AcmeCorp », « Acme-Défense », « Acme  Défense ».\nfunction countResidual(text, termes) {\n  const textSkeleton = skeleton(text);\n  let count = 0;\n  for (const t of termes) {\n    const termSkeleton = skeleton(t.terme);\n    if (!termSkeleton) continue; // skip empty skeletons\n    let from = 0;\n    for (;;) {\n      const idx = textSkeleton.indexOf(termSkeleton, from);\n      if (idx === -1) break;\n      count += 1;\n      from = idx + 1; // allow overlapping\n    }\n  }\n  return count;\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { normalize, findOccurrences, maskContacts, loadTerms, pseudonymize, countResidual, skeleton };\n}\n\n// Statistiques, rapport Markdown local et composition du mail de synthèse.\n// Embarqué dans n8n après pseudonymize.js : les fonctions de ce dernier y sont alors déjà définies.\n\nconst libPseudo = typeof pseudonymize === 'function' ? { pseudonymize, countResidual } : require('./pseudonymize');\n\nconst STATUTS = ['couverte', 'partielle', 'non_couverte', 'indeterminee'];\nconst LIBELLES = { couverte: 'Couverte', partielle: 'Partielle', non_couverte: 'Non couverte', indeterminee: 'Indéterminée' };\n\nconst MAX_EXIGENCES = 25;\n// Longueur max d'un intitulé dans le mail, appliquée APRÈS pseudonymisation : couper avant\n// pourrait laisser un fragment de terme sensible que ni le remplacement ni le contrôle ne reconnaissent.\nconst MAX_INTITULE = 120;\n\n// Motif d'échec : uniquement des comptes, jamais de nom de document (les noms portent des références hors dictionnaire).\nfunction missingDocsMotif(manquants, indexes) {\n  return `Document(s) demandé(s) non indexé(s) : ${manquants.length}. Documents indexés : ${indexes.length}. Détail dans l'historique d'exécution n8n.`;\n}\n\n// Ligne d'avertissement (nombres seuls) quand la liste d'exigences a été tronquée ; null sinon.\nfunction truncationNote(extraites) {\n  return Number(extraites) > MAX_EXIGENCES\n    ? `${extraites} exigences extraites, seules les ${MAX_EXIGENCES} premières ont été analysées.`\n    : null;\n}\n\nfunction pad(n) {\n  return String(n).padStart(2, '0');\n}\n\nfunction formatDateLabel(date) {\n  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;\n}\n\nfunction reportFileName(date) {\n  return `conformite-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.md`;\n}\n\nfunction formatDuration(ms) {\n  const s = Math.max(0, Math.round(ms / 1000));\n  return `${Math.floor(s / 60)} min ${pad(s % 60)} s`;\n}\n\nfunction computeStats(lignes) {\n  const stats = { total: lignes.length, couverte: 0, partielle: 0, non_couverte: 0, indeterminee: 0 };\n  for (const l of lignes) stats[STATUTS.includes(l.statut) ? l.statut : 'indeterminee'] += 1;\n  return stats;\n}\n\nfunction cell(text) {\n  return String(text ?? '').replace(/\\|/g, '\\\\|').replace(/\\s*\\n\\s*/g, ' ').trim();\n}\n\nfunction buildReport({ referentiel, analyse, debut, fin, lignes, extraites }) {\n  const stats = computeStats(lignes);\n  const troncature = truncationNote(extraites);\n  const out = [\n    '# Rapport de conformité',\n    '',\n    `- **Document référentiel** : ${referentiel}`,\n    `- **Document analysé** : ${analyse}`,\n    `- **Date** : ${formatDateLabel(fin)}`,\n    `- **Durée** : ${formatDuration(fin - debut)}`,\n    '',\n    ...(troncature ? [`> ⚠️ ${troncature}`, ''] : []),\n    '## Synthèse',\n    '',\n    '| Statut | Nombre |',\n    '|---|---|',\n    ...STATUTS.map((s) => `| ${LIBELLES[s]} | ${stats[s]} |`),\n    `| **Total** | **${stats.total}** |`,\n    '',\n    '## Tableau de conformité',\n    '',\n    '| ID | Type | Intitulé | Statut | Justification |',\n    '|---|---|---|---|---|',\n    ...lignes.map((l) => `| ${cell(l.id)} | ${cell(l.type)} | ${cell(l.intitule)} | ${l.statut} | ${cell(l.justification)} |`),\n    '',\n    '## Citations',\n    '',\n  ];\n  for (const l of lignes) {\n    out.push(`### ${cell(l.id)} — ${cell(l.intitule)}`, '');\n    if (l.citations.length === 0) out.push('_Aucune citation._');\n    for (const c of l.citations) out.push(`- [${cell(c.source)}] « ${cell(c.extrait)} »`);\n    out.push('');\n  }\n  return out.join('\\n');\n}\n\nfunction statsLines(stats, extraites) {\n  const troncature = truncationNote(extraites);\n  return [`Exigences analysées : ${stats.total}`, ...(troncature ? [troncature] : []), ...STATUTS.map((s) => `- ${LIBELLES[s]} : ${stats[s]}`)];\n}\n\nconst SIGNATURE = ['', 'Rapport complet : dossier reports/ de la machine locale.'];\n\nfunction buildMail({ mode, motif, statistiques, lignes = [], dict, dateLabel, extraites }) {\n  if (mode === 'echec') {\n    let detail = 'motif non communiqué (dictionnaire indisponible).';\n    if (dict.ok) {\n      const texte = libPseudo.pseudonymize(motif || 'non précisé', dict.termes);\n      detail = libPseudo.countResidual(texte, dict.termes) === 0 ? texte : 'motif retiré (occurrences sensibles résiduelles).';\n    }\n    return {\n      subject: `[n8n] Analyse de conformité – ${dateLabel} – échec`,\n      text: [\"L'analyse de conformité a échoué.\", '', `Motif : ${detail}`, ...SIGNATURE].join('\\n'),\n      detail: 'echec',\n    };\n  }\n  const subject = `[n8n] Analyse de conformité – ${dateLabel} – ${statistiques.couverte}/${statistiques.total} couvertes`;\n  const base = [\"Résultat de l'analyse de conformité\", '', ...statsLines(statistiques, extraites)];\n  const reduit = (raison) => ({ subject, text: [...base, '', `Synthèse détaillée retirée : ${raison}.`, ...SIGNATURE].join('\\n'), detail: 'statistiques' });\n  if (!dict.ok) return reduit(dict.erreur);\n  const pseudo = lignes.map((l) => ({\n    id: libPseudo.pseudonymize(String(l.id ?? '').replace(/\\s+/g, ' ').trim(), dict.termes),\n    statut: LIBELLES[l.statut] ?? LIBELLES.indeterminee,\n    intitule: libPseudo.pseudonymize(String(l.intitule ?? '').replace(/\\s+/g, ' ').trim(), dict.termes),\n  }));\n  // Contrôle sur les intitulés complets, AVANT la coupure : un terme résiduel coupé en deux\n  // échapperait sinon au contrôle.\n  const residuel = libPseudo.countResidual(pseudo.map((l) => `${l.id} | ${l.statut} | ${l.intitule}`).join('\\n'), dict.termes);\n  if (residuel > 0) return reduit(`${residuel} occurrence(s) sensible(s) résiduelle(s)`);\n  const tableau = pseudo.map((l) => `${l.id} | ${l.statut} | ${l.intitule.slice(0, MAX_INTITULE)}`);\n  return { subject, text: [...base, '', 'ID | Statut | Intitulé', ...tableau, ...SIGNATURE].join('\\n'), detail: 'complet' };\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { STATUTS, MAX_EXIGENCES, MAX_INTITULE, missingDocsMotif, truncationNote, computeStats, formatDateLabel, reportFileName, buildReport, buildMail };\n}\n\n// ---- Code propre au nœud ----\nconst p = $('Initialiser').first().json;\nconst sources = $input.all().map((i) => i.json.source).filter(Boolean);\nconst manquants = [p.referentiel, p.analyse].filter((d) => !sources.includes(d));\n// Le motif ne contient que des comptes : aucun nom de document, saisi ou indexé.\nconst motif = manquants.length ? missingDocsMotif(manquants, sources) : null;\nreturn [{ json: { ok: manquants.length === 0, motif } }];"
+      }
+    },
+    {
+      "id": "9a50b1a4-6461-3496-1493-491664172afd",
+      "name": "Documents présents ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d9997609-a9c4-44a7-2b93-b2eae11772b0",
+      "name": "Extraits du référentiel",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1100,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT text, metadata FROM n8n_vectors WHERE metadata->>'source' = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Initialiser').first().json.referentiel] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      }
+    },
+    {
+      "id": "7d186ff3-8afd-b942-29c6-0841277ed10b",
+      "name": "Reconstituer le référentiel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Contrôle des verdicts produits par l'agent et préparation du document référentiel.\n\nconst STATUTS_VALIDES = ['couverte', 'partielle', 'non_couverte', 'indeterminee'];\n// ~20 000 tokens : laisse de la place au prompt et à la réponse dans un contexte de 32k.\nconst MAX_REFERENTIEL_CHARS = 80000;\n\nfunction baseName(source) {\n  return String(source).split(/[\\\\/]/).pop().trim().toLowerCase().normalize('NFC');\n}\n\nfunction normalizeVerdict(raw, documentAnalyse) {\n  const v = raw && typeof raw === 'object' ? raw : {};\n  const citations = (Array.isArray(v.citations) ? v.citations : [])\n    .filter((c) => c && typeof c.source === 'string' && typeof c.extrait === 'string' && c.extrait.trim())\n    .map((c) => ({ source: c.source.trim(), extrait: c.extrait.trim().slice(0, 300) }));\n  let justification = typeof v.justification === 'string' && v.justification.trim() ? v.justification.trim() : 'Pas de justification fournie.';\n  let statut = v.statut;\n  if (!STATUTS_VALIDES.includes(statut)) {\n    justification = `Statut invalide (« ${statut} »). ${justification}`;\n    statut = 'indeterminee';\n  }\n  // Règle de la spec : « couverte » exige une citation du document analysé.\n  if (statut === 'couverte' && !citations.some((c) => baseName(c.source) === baseName(documentAnalyse))) {\n    statut = 'indeterminee';\n    justification = `Verdict « couverte » rejeté : aucune citation du document analysé. ${justification}`;\n  }\n  return { statut, justification, citations };\n}\n\nfunction errorVerdict(message) {\n  const justification = /max(imum)? iterations/i.test(String(message ?? '')) ? 'Recherche non concluante.' : \"Erreur d'analyse.\";\n  return { statut: 'indeterminee', justification, citations: [] };\n}\n\nfunction orderChunks(rows) {\n  const position = (r) => {\n    const from = r?.metadata?.loc?.lines?.from;\n    return Number.isFinite(from) ? from : Number.POSITIVE_INFINITY;\n  };\n  return rows\n    .map((r, i) => ({ r, i }))\n    .sort((a, b) => position(a.r) - position(b.r) || a.i - b.i)\n    .map(({ r }) => r.text)\n    .join('\\n\\n');\n}\n\nfunction checkReferentielLength(texte) {\n  if (texte.length > MAX_REFERENTIEL_CHARS) {\n    throw new Error(`Document référentiel trop long (${texte.length} caractères, maximum ${MAX_REFERENTIEL_CHARS}).`);\n  }\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { normalizeVerdict, errorVerdict, orderChunks, checkReferentielLength, MAX_REFERENTIEL_CHARS };\n}\n\n// ---- Code propre au nœud ----\nconst texte = orderChunks($input.all().map((i) => i.json));\ncheckReferentielLength(texte);\nreturn [{ json: { texte } }];"
+      }
+    },
+    {
+      "id": "e10e36ab-9e3e-85da-73c1-7baf2edf9d13",
+      "name": "Extraire les exigences",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1540,
+        -100
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=You extract the requirements and deliverables from a statement of work.\nReturn every requirement or deliverable stated in the document, in document order.\n- id: the identifier used in the document (for example \"EX-01\" or \"WP1-D2\"); if there is none, number them E1, E2, ...\n- intitule: a short title in the document's language (12 words at most)\n- description: one or two sentences restating what is required, in the document's language\n- type: \"livrable\" if it is something to deliver (report, model, tool, training material), otherwise \"exigence\"\nDo not invent items. Ignore the table of contents, page headers and footers.\n\nDocument:\n{{ $json.texte }}",
+        "hasOutputParser": true
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "24473ba1-3199-179f-6df2-669ad287c4e3",
+      "name": "Modèle (extraction)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        120
+      ],
+      "parameters": {
+        "model": "granite4.2:8b",
+        "options": {
+          "temperature": 0.1,
+          "think": false
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "name": "Ollama local"
+        }
+      }
+    },
+    {
+      "id": "cd30f564-4d0a-6d29-64c7-fdeb0d7cbac7",
+      "name": "Format des exigences",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1660,
+        120
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"exigences\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"id\": {\n            \"type\": \"string\"\n          },\n          \"intitule\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"exigence\",\n              \"livrable\"\n            ]\n          }\n        },\n        \"required\": [\n          \"id\",\n          \"intitule\",\n          \"description\",\n          \"type\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"exigences\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "f433aabf-97f3-8ea5-26a2-1159129a1ddb",
+      "name": "Lister les exigences",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "const out = $json.output ?? {};\nconst brutes = Array.isArray(out.exigences) ? out.exigences : [];\nconst liste = brutes.slice(0, 25);\nif (liste.length === 0) return [{ json: { _echec: true, motif: 'Aucune exigence identifiée dans le document référentiel.' } }];\nreturn liste.map((e, i) => ({ json: {\n  id: String(e.id || `E${i + 1}`),\n  intitule: String(e.intitule || ''),\n  extraites: brutes.length,\n  description: String(e.description || ''),\n  type: e.type === 'livrable' ? 'livrable' : 'exigence',\n} }));"
+      }
+    },
+    {
+      "id": "773af668-4bbb-158a-ab62-35ad2796a3fa",
+      "name": "Exigences trouvées ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2000,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ !$json._echec }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3b74315a-d72e-2e87-d861-012fc8af7d4f",
+      "name": "Exigences à analyser",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2220,
+        -120
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "06c16b6f-fc1d-5fc2-b861-78b85cc16966",
+      "name": "Analyser l'exigence",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2460,
+        40
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Requirement ' + $json.id + ' (' + $json.type + '): ' + $json.intitule + '\\n' + $json.description + '\\n\\nAnalysed document (proposal): ' + $('Initialiser').first().json.analyse }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You assess whether a proposal covers ONE requirement of a statement of work.\nTools:\n- chercher_dans_document_analyse searches only the proposal. Use it first, with the key terms of the requirement.\n- chercher_dans_corpus searches all documents. Use it only to understand a term.\nMake at most 3 searches, then answer.\nVerdict rules:\n- \"couverte\": a passage of the proposal fully satisfies the requirement. You MUST cite it.\n- \"partielle\": the proposal addresses the subject but not the whole requirement (smaller quantity, reduced scope). Cite it.\n- \"non_couverte\": your searches of the proposal found nothing relevant.\n- \"indeterminee\": you cannot decide.\nCitations: copy short exact excerpts (300 characters at most) and the source file name exactly as given in the search results metadata.\nWrite the justification in French, in one to three sentences.",
+          "maxIterations": 4,
+          "forceToolCallOnFirstIteration": true,
+          "enableStreaming": false
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7cd2ec86-bbba-e0f9-d95e-941c9197cb4e",
+      "name": "Modèle (agent)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        280
+      ],
+      "parameters": {
+        "model": "granite4.2:8b",
+        "options": {
+          "temperature": 0.1,
+          "think": false
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "name": "Ollama local"
+        }
+      }
+    },
+    {
+      "id": "4ab351df-b08d-cf3f-a9b0-971a7f77250d",
+      "name": "chercher_dans_document_analyse",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        2480,
+        280
+      ],
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Recherche dans le document analysé (la proposition). Entrée : une requête courte reprenant les termes clés de l'exigence.",
+        "tableName": "n8n_vectors",
+        "topK": 4,
+        "includeDocumentMetadata": true,
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "source",
+                "value": "={{ $('Initialiser').first().json.analyse }}"
+              }
+            ]
+          }
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      }
+    },
+    {
+      "id": "60e31adc-5069-37fa-39e6-9b2a49cbac4a",
+      "name": "chercher_dans_corpus",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        2620,
+        280
+      ],
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Recherche dans tous les documents indexés. À utiliser seulement pour comprendre un terme.",
+        "tableName": "n8n_vectors",
+        "topK": 4,
+        "includeDocumentMetadata": true,
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      }
+    },
+    {
+      "id": "dc5c0bdf-c770-1ab6-6512-c63bd9e19a00",
+      "name": "Embeddings (recherche)",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        2560,
+        480
+      ],
+      "parameters": {
+        "model": "bge-m3"
+      },
+      "credentials": {
+        "ollamaApi": {
+          "name": "Ollama local"
+        }
+      }
+    },
+    {
+      "id": "a0b27a8c-05b8-f123-59da-8883bae312f5",
+      "name": "Format du verdict",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2760,
+        280
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"statut\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"couverte\",\n        \"partielle\",\n        \"non_couverte\",\n        \"indeterminee\"\n      ]\n    },\n    \"justification\": {\n      \"type\": \"string\"\n    },\n    \"citations\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"source\": {\n            \"type\": \"string\"\n          },\n          \"extrait\": {\n            \"type\": \"string\"\n          }\n        },\n        \"required\": [\n          \"source\",\n          \"extrait\"\n        ]\n      }\n    }\n  },\n  \"required\": [\n    \"statut\",\n    \"justification\",\n    \"citations\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "92297dc3-dd16-48fb-8e0f-508860ccd739",
+      "name": "Normaliser le verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        -20
+      ],
+      "parameters": {
+        "jsCode": "// Contrôle des verdicts produits par l'agent et préparation du document référentiel.\n\nconst STATUTS_VALIDES = ['couverte', 'partielle', 'non_couverte', 'indeterminee'];\n// ~20 000 tokens : laisse de la place au prompt et à la réponse dans un contexte de 32k.\nconst MAX_REFERENTIEL_CHARS = 80000;\n\nfunction baseName(source) {\n  return String(source).split(/[\\\\/]/).pop().trim().toLowerCase().normalize('NFC');\n}\n\nfunction normalizeVerdict(raw, documentAnalyse) {\n  const v = raw && typeof raw === 'object' ? raw : {};\n  const citations = (Array.isArray(v.citations) ? v.citations : [])\n    .filter((c) => c && typeof c.source === 'string' && typeof c.extrait === 'string' && c.extrait.trim())\n    .map((c) => ({ source: c.source.trim(), extrait: c.extrait.trim().slice(0, 300) }));\n  let justification = typeof v.justification === 'string' && v.justification.trim() ? v.justification.trim() : 'Pas de justification fournie.';\n  let statut = v.statut;\n  if (!STATUTS_VALIDES.includes(statut)) {\n    justification = `Statut invalide (« ${statut} »). ${justification}`;\n    statut = 'indeterminee';\n  }\n  // Règle de la spec : « couverte » exige une citation du document analysé.\n  if (statut === 'couverte' && !citations.some((c) => baseName(c.source) === baseName(documentAnalyse))) {\n    statut = 'indeterminee';\n    justification = `Verdict « couverte » rejeté : aucune citation du document analysé. ${justification}`;\n  }\n  return { statut, justification, citations };\n}\n\nfunction errorVerdict(message) {\n  const justification = /max(imum)? iterations/i.test(String(message ?? '')) ? 'Recherche non concluante.' : \"Erreur d'analyse.\";\n  return { statut: 'indeterminee', justification, citations: [] };\n}\n\nfunction orderChunks(rows) {\n  const position = (r) => {\n    const from = r?.metadata?.loc?.lines?.from;\n    return Number.isFinite(from) ? from : Number.POSITIVE_INFINITY;\n  };\n  return rows\n    .map((r, i) => ({ r, i }))\n    .sort((a, b) => position(a.r) - position(b.r) || a.i - b.i)\n    .map(({ r }) => r.text)\n    .join('\\n\\n');\n}\n\nfunction checkReferentielLength(texte) {\n  if (texte.length > MAX_REFERENTIEL_CHARS) {\n    throw new Error(`Document référentiel trop long (${texte.length} caractères, maximum ${MAX_REFERENTIEL_CHARS}).`);\n  }\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { normalizeVerdict, errorVerdict, orderChunks, checkReferentielLength, MAX_REFERENTIEL_CHARS };\n}\n\n// ---- Code propre au nœud ----\nconst analyse = $('Initialiser').first().json.analyse;\nconst exigence = $('Exigences à analyser').first().json;\nreturn [{ json: { ...exigence, ...normalizeVerdict($json.output, analyse) } }];"
+      }
+    },
+    {
+      "id": "3bf91339-ca9b-1462-820f-594342a5a756",
+      "name": "Verdict en erreur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        140
+      ],
+      "parameters": {
+        "jsCode": "// Contrôle des verdicts produits par l'agent et préparation du document référentiel.\n\nconst STATUTS_VALIDES = ['couverte', 'partielle', 'non_couverte', 'indeterminee'];\n// ~20 000 tokens : laisse de la place au prompt et à la réponse dans un contexte de 32k.\nconst MAX_REFERENTIEL_CHARS = 80000;\n\nfunction baseName(source) {\n  return String(source).split(/[\\\\/]/).pop().trim().toLowerCase().normalize('NFC');\n}\n\nfunction normalizeVerdict(raw, documentAnalyse) {\n  const v = raw && typeof raw === 'object' ? raw : {};\n  const citations = (Array.isArray(v.citations) ? v.citations : [])\n    .filter((c) => c && typeof c.source === 'string' && typeof c.extrait === 'string' && c.extrait.trim())\n    .map((c) => ({ source: c.source.trim(), extrait: c.extrait.trim().slice(0, 300) }));\n  let justification = typeof v.justification === 'string' && v.justification.trim() ? v.justification.trim() : 'Pas de justification fournie.';\n  let statut = v.statut;\n  if (!STATUTS_VALIDES.includes(statut)) {\n    justification = `Statut invalide (« ${statut} »). ${justification}`;\n    statut = 'indeterminee';\n  }\n  // Règle de la spec : « couverte » exige une citation du document analysé.\n  if (statut === 'couverte' && !citations.some((c) => baseName(c.source) === baseName(documentAnalyse))) {\n    statut = 'indeterminee';\n    justification = `Verdict « couverte » rejeté : aucune citation du document analysé. ${justification}`;\n  }\n  return { statut, justification, citations };\n}\n\nfunction errorVerdict(message) {\n  const justification = /max(imum)? iterations/i.test(String(message ?? '')) ? 'Recherche non concluante.' : \"Erreur d'analyse.\";\n  return { statut: 'indeterminee', justification, citations: [] };\n}\n\nfunction orderChunks(rows) {\n  const position = (r) => {\n    const from = r?.metadata?.loc?.lines?.from;\n    return Number.isFinite(from) ? from : Number.POSITIVE_INFINITY;\n  };\n  return rows\n    .map((r, i) => ({ r, i }))\n    .sort((a, b) => position(a.r) - position(b.r) || a.i - b.i)\n    .map(({ r }) => r.text)\n    .join('\\n\\n');\n}\n\nfunction checkReferentielLength(texte) {\n  if (texte.length > MAX_REFERENTIEL_CHARS) {\n    throw new Error(`Document référentiel trop long (${texte.length} caractères, maximum ${MAX_REFERENTIEL_CHARS}).`);\n  }\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { normalizeVerdict, errorVerdict, orderChunks, checkReferentielLength, MAX_REFERENTIEL_CHARS };\n}\n\n// ---- Code propre au nœud ----\nconst exigence = $('Exigences à analyser').first().json;\nconst message = $json.error?.message ?? $json.error ?? '';\nreturn [{ json: { ...exigence, ...errorVerdict(message) } }];"
+      }
+    },
+    {
+      "id": "3500a9ef-e90a-9cb3-bc52-947c71fbb217",
+      "name": "Assembler le rapport",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        -300
+      ],
+      "parameters": {
+        "jsCode": "// Pseudonymisation déterministe des textes qui quittent la machine.\n// Ce fichier est testé avec `node --test` et embarqué tel quel dans les nœuds Code de n8n\n// (voir n8n/src/builder.mjs, libCode).\n\nconst WORD_CHAR = /[\\p{L}\\p{N}]/u;\n\nfunction normalize(text) {\n  return String(text)\n    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/[\\s\\u002D\\u2010-\\u2015\\u2212]/gu, ' ')\n    .replace(/['\\u2018\\u2019\\u02BC\\u0060\\u00B4]/gu, \"'\");\n}\n\nfunction skeleton(text) {\n  return normalize(text).replace(/[^\\p{L}\\p{N}]+/gu, '');\n}\n\n// Texte normalisé, et pour chaque caractère normalisé sa position dans le texte d'origine.\nfunction buildIndex(text) {\n  let norm = '';\n  const map = [];\n  let pos = 0;\n  for (const char of Array.from(text)) {\n    const n = normalize(char);\n    for (let k = 0; k < n.length; k++) map.push(pos);\n    norm += n;\n    pos += char.length;\n  }\n  map.push(pos);\n  return { norm, map };\n}\n\nfunction findOccurrences(text, term, wholeWord) {\n  const source = String(text ?? '');\n  const needle = normalize(term ?? '').trim();\n  if (!needle) return [];\n  const { norm, map } = buildIndex(source);\n  const found = [];\n  let from = 0;\n  for (;;) {\n    const start = norm.indexOf(needle, from);\n    if (start === -1) break;\n    const end = start + needle.length;\n    const before = start === 0 || !WORD_CHAR.test(norm[start - 1]);\n    const after = end === norm.length || !WORD_CHAR.test(norm[end]);\n    if (!wholeWord || (before && after)) found.push([map[start], map[end]]);\n    from = start + 1;\n  }\n  return found;\n}\n\nfunction maskContacts(text) {\n  return String(text)\n    .replace(/\\bhttps?:\\/\\/[^\\s)>\\]]+|\\bwww\\.[^\\s)>\\]]+/gi, '[URL]')\n    .replace(/[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)+/gu, '[EMAIL]');\n}\n\nfunction loadTerms(raw) {\n  let data = raw;\n  if (typeof raw === 'string') {\n    try {\n      data = JSON.parse(raw);\n    } catch {\n      return { ok: false, termes: [], erreur: 'dictionnaire illisible' };\n    }\n  }\n  if (!data || !Array.isArray(data.termes)) return { ok: false, termes: [], erreur: 'dictionnaire indisponible' };\n  if (data.termes.length === 0) return { ok: false, termes: [], erreur: 'dictionnaire vide' };\n  // Une entrée mal formée invalide tout le dictionnaire : l'ignorer laisserait passer un terme.\n  const valide = (t) => t && typeof t.terme === 'string' && normalize(t.terme).trim() && typeof t.remplacement === 'string';\n  if (!data.termes.every(valide)) return { ok: false, termes: [], erreur: 'dictionnaire invalide' };\n  return { ok: true, termes: data.termes, erreur: null };\n}\n\nfunction pseudonymize(text, termes) {\n  // Contacts masqués d'abord : sinon un terme remplacé dans « x@novaltis.example »\n  // casserait l'adresse et elle ne serait plus reconnue.\n  const source = maskContacts(String(text ?? ''));\n  const ordered = [...termes].sort((a, b) => normalize(b.terme).trim().length - normalize(a.terme).trim().length);\n  // Un seul passage sur le texte d'origine : un remplacement n'est jamais retraité.\n  const taken = [];\n  for (const t of ordered) {\n    for (const [start, end] of findOccurrences(source, t.terme, true)) {\n      if (taken.some(([s, e]) => start < e && s < end)) continue;\n      taken.push([start, end, t.remplacement]);\n    }\n  }\n  taken.sort((a, b) => a[0] - b[0]);\n  let out = '';\n  let last = 0;\n  for (const [start, end, remplacement] of taken) {\n    out += source.slice(last, start) + remplacement;\n    last = end;\n  }\n  return out + source.slice(last);\n}\n\n// Contrôle strict : avec squelettes (lettres et chiffres uniquement), pour attraper « AcmeCorp », « Acme-Défense », « Acme  Défense ».\nfunction countResidual(text, termes) {\n  const textSkeleton = skeleton(text);\n  let count = 0;\n  for (const t of termes) {\n    const termSkeleton = skeleton(t.terme);\n    if (!termSkeleton) continue; // skip empty skeletons\n    let from = 0;\n    for (;;) {\n      const idx = textSkeleton.indexOf(termSkeleton, from);\n      if (idx === -1) break;\n      count += 1;\n      from = idx + 1; // allow overlapping\n    }\n  }\n  return count;\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { normalize, findOccurrences, maskContacts, loadTerms, pseudonymize, countResidual, skeleton };\n}\n\n// Statistiques, rapport Markdown local et composition du mail de synthèse.\n// Embarqué dans n8n après pseudonymize.js : les fonctions de ce dernier y sont alors déjà définies.\n\nconst libPseudo = typeof pseudonymize === 'function' ? { pseudonymize, countResidual } : require('./pseudonymize');\n\nconst STATUTS = ['couverte', 'partielle', 'non_couverte', 'indeterminee'];\nconst LIBELLES = { couverte: 'Couverte', partielle: 'Partielle', non_couverte: 'Non couverte', indeterminee: 'Indéterminée' };\n\nconst MAX_EXIGENCES = 25;\n// Longueur max d'un intitulé dans le mail, appliquée APRÈS pseudonymisation : couper avant\n// pourrait laisser un fragment de terme sensible que ni le remplacement ni le contrôle ne reconnaissent.\nconst MAX_INTITULE = 120;\n\n// Motif d'échec : uniquement des comptes, jamais de nom de document (les noms portent des références hors dictionnaire).\nfunction missingDocsMotif(manquants, indexes) {\n  return `Document(s) demandé(s) non indexé(s) : ${manquants.length}. Documents indexés : ${indexes.length}. Détail dans l'historique d'exécution n8n.`;\n}\n\n// Ligne d'avertissement (nombres seuls) quand la liste d'exigences a été tronquée ; null sinon.\nfunction truncationNote(extraites) {\n  return Number(extraites) > MAX_EXIGENCES\n    ? `${extraites} exigences extraites, seules les ${MAX_EXIGENCES} premières ont été analysées.`\n    : null;\n}\n\nfunction pad(n) {\n  return String(n).padStart(2, '0');\n}\n\nfunction formatDateLabel(date) {\n  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;\n}\n\nfunction reportFileName(date) {\n  return `conformite-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.md`;\n}\n\nfunction formatDuration(ms) {\n  const s = Math.max(0, Math.round(ms / 1000));\n  return `${Math.floor(s / 60)} min ${pad(s % 60)} s`;\n}\n\nfunction computeStats(lignes) {\n  const stats = { total: lignes.length, couverte: 0, partielle: 0, non_couverte: 0, indeterminee: 0 };\n  for (const l of lignes) stats[STATUTS.includes(l.statut) ? l.statut : 'indeterminee'] += 1;\n  return stats;\n}\n\nfunction cell(text) {\n  return String(text ?? '').replace(/\\|/g, '\\\\|').replace(/\\s*\\n\\s*/g, ' ').trim();\n}\n\nfunction buildReport({ referentiel, analyse, debut, fin, lignes, extraites }) {\n  const stats = computeStats(lignes);\n  const troncature = truncationNote(extraites);\n  const out = [\n    '# Rapport de conformité',\n    '',\n    `- **Document référentiel** : ${referentiel}`,\n    `- **Document analysé** : ${analyse}`,\n    `- **Date** : ${formatDateLabel(fin)}`,\n    `- **Durée** : ${formatDuration(fin - debut)}`,\n    '',\n    ...(troncature ? [`> ⚠️ ${troncature}`, ''] : []),\n    '## Synthèse',\n    '',\n    '| Statut | Nombre |',\n    '|---|---|',\n    ...STATUTS.map((s) => `| ${LIBELLES[s]} | ${stats[s]} |`),\n    `| **Total** | **${stats.total}** |`,\n    '',\n    '## Tableau de conformité',\n    '',\n    '| ID | Type | Intitulé | Statut | Justification |',\n    '|---|---|---|---|---|',\n    ...lignes.map((l) => `| ${cell(l.id)} | ${cell(l.type)} | ${cell(l.intitule)} | ${l.statut} | ${cell(l.justification)} |`),\n    '',\n    '## Citations',\n    '',\n  ];\n  for (const l of lignes) {\n    out.push(`### ${cell(l.id)} — ${cell(l.intitule)}`, '');\n    if (l.citations.length === 0) out.push('_Aucune citation._');\n    for (const c of l.citations) out.push(`- [${cell(c.source)}] « ${cell(c.extrait)} »`);\n    out.push('');\n  }\n  return out.join('\\n');\n}\n\nfunction statsLines(stats, extraites) {\n  const troncature = truncationNote(extraites);\n  return [`Exigences analysées : ${stats.total}`, ...(troncature ? [troncature] : []), ...STATUTS.map((s) => `- ${LIBELLES[s]} : ${stats[s]}`)];\n}\n\nconst SIGNATURE = ['', 'Rapport complet : dossier reports/ de la machine locale.'];\n\nfunction buildMail({ mode, motif, statistiques, lignes = [], dict, dateLabel, extraites }) {\n  if (mode === 'echec') {\n    let detail = 'motif non communiqué (dictionnaire indisponible).';\n    if (dict.ok) {\n      const texte = libPseudo.pseudonymize(motif || 'non précisé', dict.termes);\n      detail = libPseudo.countResidual(texte, dict.termes) === 0 ? texte : 'motif retiré (occurrences sensibles résiduelles).';\n    }\n    return {\n      subject: `[n8n] Analyse de conformité – ${dateLabel} – échec`,\n      text: [\"L'analyse de conformité a échoué.\", '', `Motif : ${detail}`, ...SIGNATURE].join('\\n'),\n      detail: 'echec',\n    };\n  }\n  const subject = `[n8n] Analyse de conformité – ${dateLabel} – ${statistiques.couverte}/${statistiques.total} couvertes`;\n  const base = [\"Résultat de l'analyse de conformité\", '', ...statsLines(statistiques, extraites)];\n  const reduit = (raison) => ({ subject, text: [...base, '', `Synthèse détaillée retirée : ${raison}.`, ...SIGNATURE].join('\\n'), detail: 'statistiques' });\n  if (!dict.ok) return reduit(dict.erreur);\n  const pseudo = lignes.map((l) => ({\n    id: libPseudo.pseudonymize(String(l.id ?? '').replace(/\\s+/g, ' ').trim(), dict.termes),\n    statut: LIBELLES[l.statut] ?? LIBELLES.indeterminee,\n    intitule: libPseudo.pseudonymize(String(l.intitule ?? '').replace(/\\s+/g, ' ').trim(), dict.termes),\n  }));\n  // Contrôle sur les intitulés complets, AVANT la coupure : un terme résiduel coupé en deux\n  // échapperait sinon au contrôle.\n  const residuel = libPseudo.countResidual(pseudo.map((l) => `${l.id} | ${l.statut} | ${l.intitule}`).join('\\n'), dict.termes);\n  if (residuel > 0) return reduit(`${residuel} occurrence(s) sensible(s) résiduelle(s)`);\n  const tableau = pseudo.map((l) => `${l.id} | ${l.statut} | ${l.intitule.slice(0, MAX_INTITULE)}`);\n  return { subject, text: [...base, '', 'ID | Statut | Intitulé', ...tableau, ...SIGNATURE].join('\\n'), detail: 'complet' };\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { STATUTS, MAX_EXIGENCES, MAX_INTITULE, missingDocsMotif, truncationNote, computeStats, formatDateLabel, reportFileName, buildReport, buildMail };\n}\n\n// ---- Code propre au nœud ----\nconst p = $('Initialiser').first().json;\nconst lignes = $input.all().map(({ json: l }) => ({\n  id: l.id, type: l.type, intitule: l.intitule, statut: l.statut,\n  justification: l.justification, citations: l.citations ?? [],\n}));\nconst extraites = $input.first().json.extraites ?? lignes.length;\nconst debut = new Date(p.debut);\nconst fin = new Date();\nreturn [{ json: {\n  nomFichier: reportFileName(fin),\n  rapport: buildReport({ referentiel: p.referentiel, analyse: p.analyse, debut, fin, lignes, extraites }),\n  synthese: { mode: 'succes', motif: null, statistiques: computeStats(lignes),\n    lignes: lignes.map(({ id, intitule, statut }) => ({ id, intitule, statut })), extraites, horodatage: fin.toISOString() },\n} }];"
+      }
+    },
+    {
+      "id": "b03b3b3a-fefa-fd79-0351-74f86527c248",
+      "name": "Convertir le rapport",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2680,
+        -300
+      ],
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "rapport",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "={{ $json.nomFichier }}",
+          "encoding": "utf8"
+        }
+      }
+    },
+    {
+      "id": "6b520511-0714-9201-358c-950f351f6727",
+      "name": "Écrire le rapport",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2900,
+        -300
+      ],
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ '/data/reports/' + $('Assembler le rapport').first().json.nomFichier }}",
+        "dataPropertyName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "2a08755c-19d8-b2fa-9574-137db38cc326",
+      "name": "Préparer la synthèse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -300
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $('Assembler le rapport').first().json.synthese }];"
+      }
+    },
+    {
+      "id": "4d4d4cc4-bb1b-4253-d0c9-847421c62a0c",
+      "name": "Préparer l'échec",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const motif = $input.first().json.motif || 'Extraction des exigences impossible : sortie du modèle invalide après 3 tentatives.';\nreturn [{ json: { mode: 'echec', motif, statistiques: null, lignes: [], horodatage: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "6521e195-b0b5-e5f2-8c9c-dd6c6a51c472",
+      "name": "Envoyer la synthèse",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        3360,
+        -40
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "cnfSynthese00003",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Entrée": {
+      "main": [
+        [
+          {
+            "node": "Initialiser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialiser": {
+      "main": [
+        [
+          {
+            "node": "Documents indexés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Documents indexés": {
+      "main": [
+        [
+          {
+            "node": "Vérifier les documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier les documents": {
+      "main": [
+        [
+          {
+            "node": "Documents présents ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Documents présents ?": {
+      "main": [
+        [
+          {
+            "node": "Extraits du référentiel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Préparer l'échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraits du référentiel": {
+      "main": [
+        [
+          {
+            "node": "Reconstituer le référentiel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconstituer le référentiel": {
+      "main": [
+        [
+          {
+            "node": "Extraire les exigences",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modèle (extraction)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extraire les exigences",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format des exigences": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extraire les exigences",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire les exigences": {
+      "main": [
+        [
+          {
+            "node": "Lister les exigences",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Préparer l'échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lister les exigences": {
+      "main": [
+        [
+          {
+            "node": "Exigences trouvées ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exigences trouvées ?": {
+      "main": [
+        [
+          {
+            "node": "Exigences à analyser",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Préparer l'échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exigences à analyser": {
+      "main": [
+        [
+          {
+            "node": "Assembler le rapport",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyser l'exigence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modèle (agent)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analyser l'exigence",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chercher_dans_document_analyse": {
+      "ai_tool": [
+        [
+          {
+            "node": "Analyser l'exigence",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chercher_dans_corpus": {
+      "ai_tool": [
+        [
+          {
+            "node": "Analyser l'exigence",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings (recherche)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "chercher_dans_document_analyse",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "chercher_dans_corpus",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format du verdict": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Analyser l'exigence",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyser l'exigence": {
+      "main": [
+        [
+          {
+            "node": "Normaliser le verdict",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verdict en erreur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliser le verdict": {
+      "main": [
+        [
+          {
+            "node": "Exigences à analyser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verdict en erreur": {
+      "main": [
+        [
+          {
+            "node": "Exigences à analyser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assembler le rapport": {
+      "main": [
+        [
+          {
+            "node": "Convertir le rapport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir le rapport": {
+      "main": [
+        [
+          {
+            "node": "Écrire le rapport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Écrire le rapport": {
+      "main": [
+        [
+          {
+            "node": "Préparer la synthèse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer la synthèse": {
+      "main": [
+        [
+          {
+            "node": "Envoyer la synthèse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer l'échec": {
+      "main": [
+        [
+          {
+            "node": "Envoyer la synthèse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "cnfAlerteEchec04"
+  },
+  "pinData": {},
+  "tags": []
+}

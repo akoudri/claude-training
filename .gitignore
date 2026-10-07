@@ -1,8 +1,40 @@
+# ARGOS
 argos/node_modules/
 argos/dist/
 argos/data/*.db
 argos/data/*.db-*
 argos/.env
 argos/coverage/
+
+# Claude Code et support formateur (local uniquement)
 .claude/settings.local.json
 local/
+
+# MCP — fichiers générés par Python
+mcp/__pycache__/
+mcp/*.py[oc]
+mcp/build/
+mcp/dist/
+mcp/wheels/
+mcp/*.egg-info
+
+# MCP — environnement virtuel
+mcp/.venv/
+
+# MCP — données d'exécution (bloc-notes du serveur NotesRapides)
+mcp/notes.json
+
+# Blender — fichier de test et sauvegardes automatiques (.blend1, .blend2…)
+mcp/test.blend
+*.blend[0-9]*
+
+# LLM local — secrets
+local-llm/.env
+
+# LLM local — données confidentielles et configuration locale de n8n
+local-llm/documents/*
+!local-llm/documents/.gitkeep
+local-llm/reports/*
+!local-llm/reports/.gitkeep
+local-llm/n8n/config/*
+!local-llm/n8n/config/*.example.json

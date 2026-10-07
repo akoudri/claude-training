@@ -1,0 +1,279 @@
+{
+  "id": "cnfIngestion0001",
+  "name": "01 – Ingestion des documents",
+  "active": false,
+  "nodes": [
+    {
+      "id": "649bd1d6-642a-275c-1dac-8671f24be956",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -320
+      ],
+      "parameters": {
+        "content": "## Ingestion\n\nPrépare la **mémoire documentaire** de l’agent : chaque document de `documents/` est découpé en extraits de 1000 caractères, transformé en vecteurs par `bge-m3`, puis stocké dans la table `n8n_vectors`.\n\nL’index est **reconstruit entièrement** à chaque lancement : simple et sans doublon.\n\nMêmes réglages de découpage qu’Open WebUI, pour comparer les deux systèmes à corpus égal.",
+        "width": 700,
+        "height": 260
+      }
+    },
+    {
+      "id": "e53ec6a9-0123-f009-a10d-e93169dc70d4",
+      "name": "Démarrer",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "394e39fe-3092-f1f3-dc9c-ff962d8dcea6",
+      "name": "Vider l'index",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DROP TABLE IF EXISTS n8n_vectors;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      }
+    },
+    {
+      "id": "60b75970-5aa8-a532-28ee-306679fdb117",
+      "name": "Lire les documents",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/documents/*.{docx,pdf,md}",
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "231b801b-5aab-e44e-c3d0-696c2e2a66d2",
+      "name": "Nommer la source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Métadonnée « source » = nom du fichier : sert au filtrage par document dans l'analyse.\nreturn $input.all().map((item) => ({ json: { source: item.binary.data.fileName }, binary: item.binary }));"
+      }
+    },
+    {
+      "id": "13ca506d-da8f-2920-0019-92895cf39803",
+      "name": "Indexer",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        900,
+        0
+      ],
+      "parameters": {
+        "mode": "insert",
+        "tableName": "n8n_vectors",
+        "embeddingBatchSize": 32,
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      }
+    },
+    {
+      "id": "58467904-cef4-40be-d945-a2bb55910d01",
+      "name": "Charger le document",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        220
+      ],
+      "parameters": {
+        "dataType": "binary",
+        "binaryMode": "allInputData",
+        "loader": "auto",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "source",
+                "value": "={{ $json.source }}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "9ebaf5bb-10c3-eade-d2bf-916020450741",
+      "name": "Découper",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        420
+      ],
+      "parameters": {
+        "chunkSize": 1000,
+        "chunkOverlap": 150,
+        "options": {}
+      }
+    },
+    {
+      "id": "112ff9a6-332c-f5dc-748f-07f153164188",
+      "name": "Embeddings bge-m3",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        820,
+        220
+      ],
+      "parameters": {
+        "model": "bge-m3"
+      },
+      "credentials": {
+        "ollamaApi": {
+          "name": "Ollama local"
+        }
+      }
+    },
+    {
+      "id": "d2a65780-9d07-f419-632a-61fd53ae4bb2",
+      "name": "Bilan",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1180,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT metadata->>'source' AS source, count(*) AS extraits FROM n8n_vectors GROUP BY 1 ORDER BY 1;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres rag"
+        }
+      },
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Démarrer": {
+      "main": [
+        [
+          {
+            "node": "Vider l'index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vider l'index": {
+      "main": [
+        [
+          {
+            "node": "Lire les documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire les documents": {
+      "main": [
+        [
+          {
+            "node": "Nommer la source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nommer la source": {
+      "main": [
+        [
+          {
+            "node": "Indexer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Indexer": {
+      "main": [
+        [
+          {
+            "node": "Bilan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Charger le document": {
+      "ai_document": [
+        [
+          {
+            "node": "Indexer",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Découper": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Charger le document",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings bge-m3": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Indexer",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "cnfAlerteEchec04"
+  },
+  "pinData": {},
+  "tags": []
+}

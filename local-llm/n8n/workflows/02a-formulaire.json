@@ -1,0 +1,114 @@
+{
+  "id": "cnfFormulaire02a",
+  "name": "02a – Formulaire d'analyse",
+  "active": false,
+  "nodes": [
+    {
+      "id": "6f735312-87c3-7307-3a3a-e961ef4d2012",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -300
+      ],
+      "parameters": {
+        "content": "## Point d'entrée\n\nFormulaire : http://localhost:5678/form/analyse-conformite\n\nIl lance le workflow 02 **sans attendre** sa fin : l'analyse dure 10 à 20 minutes. Les noms de fichiers sont ceux du dossier `documents/`.",
+        "width": 620,
+        "height": 220
+      }
+    },
+    {
+      "id": "1d1b8dbf-5e21-bd07-1265-00db129d376e",
+      "name": "Formulaire",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "formTitle": "Analyse de conformité",
+        "formDescription": "Compare un document analysé (proposition) à un document référentiel (cahier des charges). Indiquez les noms de fichiers du dossier documents/.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Document référentiel",
+              "fieldName": "referentiel",
+              "fieldType": "text",
+              "defaultValue": "sow-exemple.md",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Document analysé",
+              "fieldName": "analyse",
+              "fieldType": "text",
+              "defaultValue": "Proposition – Projet Héron, v2.md",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "onReceived",
+        "options": {
+          "path": "analyse-conformite",
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "Analyse lancée : rapport dans reports/, synthèse par mail à la fin (10 à 20 minutes)."
+            }
+          }
+        }
+      },
+      "webhookId": "fd038975-76f7-5376-996c-5438c9c74d16"
+    },
+    {
+      "id": "97193203-17e0-999a-6e62-e63db17e5d86",
+      "name": "Lancer l'analyse",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "cnfAnalyse000002",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Formulaire": {
+      "main": [
+        [
+          {
+            "node": "Lancer l'analyse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "cnfAlerteEchec04"
+  },
+  "pinData": {},
+  "tags": []
+}

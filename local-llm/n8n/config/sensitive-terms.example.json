@@ -1,0 +1,9 @@
+{
+  "termes": [
+    { "terme": "Acme Défense", "remplacement": "[CLIENT]" },
+    { "terme": "Acme", "remplacement": "[CLIENT]" },
+    { "terme": "Novaltis", "remplacement": "[PRESTATAIRE]" },
+    { "terme": "Projet Héron", "remplacement": "[PROJET-1]" },
+    { "terme": "Jeanne Martin", "remplacement": "[PERSONNE-1]" }
+  ]
+}

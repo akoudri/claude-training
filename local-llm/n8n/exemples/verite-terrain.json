@@ -1,0 +1,16 @@
+{
+  "documentAnalyse": "Proposition – Projet Héron, v2.md",
+  "exigences": [
+    { "id": "EX-01", "statut": "couverte" },
+    { "id": "EX-02", "statut": "couverte" },
+    { "id": "EX-03", "statut": "partielle" },
+    { "id": "EX-04", "statut": "partielle" },
+    { "id": "EX-05", "statut": "couverte" },
+    { "id": "EX-06", "statut": "couverte" },
+    { "id": "EX-07", "statut": "couverte" },
+    { "id": "EX-08", "statut": "couverte" },
+    { "id": "EX-09", "statut": "non_couverte" },
+    { "id": "EX-10", "statut": "non_couverte" }
+  ],
+  "omissions": ["EX-09", "EX-10"]
+}

@@ -1,0 +1,49 @@
+{
+  // Dev container pour Claude Code branché sur l'Ollama local de la stack mcp-simple.
+  // Inspiré du conteneur de référence d'Anthropic (anthropics/claude-code/.devcontainer),
+  // mais isolé par le réseau plutôt que par un pare-feu dans le conteneur.
+  "name": "Claude Code local (Ollama)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": { "TZ": "${localEnv:TZ:Europe/Paris}", "CLAUDE_CODE_VERSION": "2.1.291" }
+  },
+  "runArgs": [
+    // Réseau "internal" de la stack : aucune route vers Internet, aucun DNS externe.
+    // Seule la passerelle ollama-gateway y est joignable. La stack doit tourner avant l'ouverture.
+    "--network=mcp-simple_agents"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": ["anthropic.claude-code"],
+      // Fournisseur tiers : pas d'écran de connexion Anthropic dans le panneau de l'extension.
+      "settings": { "claudeCode.disableLoginPrompt": true }
+    }
+  },
+  "remoteUser": "node",
+  "mounts": [
+    "source=claude-code-local-config-${devcontainerId},target=/home/node/.claude,type=volume",
+    // La configuration du conteneur est en lecture seule depuis le conteneur : l'agent ne peut pas
+    // y ajouter un initializeCommand (exécuté sur l'hôte) ni assouplir l'isolement.
+    "source=${localWorkspaceFolder}/.devcontainer,target=/workspace/.devcontainer,type=bind,readonly"
+  ],
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
+    "ANTHROPIC_BASE_URL": "http://ollama-gateway:8080",
+    "ANTHROPIC_AUTH_TOKEN": "ollama",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_MODEL": "${localEnv:CLAUDE_LOCAL_MODEL:ornith-code}",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${localEnv:CLAUDE_LOCAL_MODEL:ornith-code}",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${localEnv:CLAUDE_LOCAL_MODEL:ornith-code}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${localEnv:CLAUDE_LOCAL_MODEL:ornith-code}",
+    // Fenêtre réelle du modèle : à aligner sur le num_ctx de la variante Ollama si on change de modèle.
+    // Sans elle, Claude Code suppose 200k tokens pour un modèle inconnu, ne compacte jamais à temps
+    // et Ollama tronque le prompt.
+    "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "${localEnv:CLAUDE_LOCAL_CONTEXT:65536}",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_AUTOUPDATER": "1"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  // Vérifie à chaque démarrage que la passerelle répond (la stack tourne-t-elle ?).
+  "postStartCommand": "curl -sf -m 5 http://ollama-gateway:8080/api/version && echo ' : passerelle Ollama joignable'"
+}
