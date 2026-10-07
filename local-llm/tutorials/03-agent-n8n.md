@@ -67,7 +67,7 @@ Le démonstrateur découpe donc la tâche : le **squelette est orchestré** (wor
 | 02 | Analyse de conformité | Appelé par un autre workflow | Cœur de l'analyse : validation, extraction des exigences, boucle avec un agent par exigence, rapport local, appel du 03. |
 | 02a | Formulaire d'analyse | Formulaire n8n | Collecte les deux noms de fichiers et lance le 02 **sans attendre sa fin**. |
 | 03 | Synthèse et envoi | Appelé par le 02 | Pseudonymisation, contrôle bloquant, envoi du mail par SMTP. |
-| 04 | Alerte d'échec | *Error Trigger* | Workflow d'erreur des workflows 01, 02, 02a et 03 : envoie un mail minimal. |
+| 04 | Alerte d'échec | *Error Trigger* | Workflow d'erreur des workflows 01, 02, 02a et 03 : envoie un mail minimal. Il ne se déclenche que pour les exécutions « de production » (formulaire et sous-workflows qu'il appelle), voir section 8.3. |
 | 90 | Test synthèse | Manuel | Teste le 03 seul, avec des données fictives (cas « contrôle OK » et « terme résiduel »). |
 | 91 | Test analyse | Manuel | Lance le 02 sur le corpus fictif. |
 
@@ -297,10 +297,12 @@ Copier les documents (DOCX de préférence, sinon Markdown ou PDF) dans `documen
 
 ```bash
 cp n8n/exemples/sow-exemple.md "n8n/exemples/Proposition – Projet Héron, v2.md" documents/
-docker compose exec -T -e N8N_RUNNERS_BROKER_PORT=5690 n8n n8n execute --id=cnfIngestion0001 2>&1 | grep -v -i warn | tail -20
+docker compose exec -T -e N8N_RUNNERS_BROKER_PORT=5690 n8n n8n execute --id=cnfIngestion0001 2>&1 | grep -E -B1 '"extraits":|^  "status":|No file'
 ```
 
-On peut aussi ouvrir le workflow « 01 – Ingestion des documents » dans l'interface et cliquer sur *Execute workflow*.
+La commande affiche l'exécution complète en JSON, soit plusieurs milliers de lignes : le filtre `grep` n'en garde que le bilan (nom de chaque document suivi de son nombre d'extraits) et le statut final, `"status": "success"`.
+
+On peut aussi ouvrir le workflow « 01 – Ingestion des documents » dans l'interface et cliquer sur *Execute workflow* : le bilan se lit dans le dernier nœud, `Bilan`.
 
 > **Pourquoi `-e N8N_RUNNERS_BROKER_PORT=5690`** : l'instance qui tourne occupe déjà le port 5679, et `n8n execute` en lance une seconde dans le même conteneur : conflit de port. Donner un autre port à la CLI règle le problème.
 
@@ -312,7 +314,7 @@ Résultat mesuré sur le corpus fictif :
 | `Proposition – Projet Héron, v2.md` | 2 |
 | **Total** | **5**, vecteurs de dimension 1024 (`bge-m3`) |
 
-Le workflow vide d'abord la table (`DROP TABLE IF EXISTS n8n_vectors`) puis la reconstruit : l'opération est idempotente, sans doublon. Si `documents/` est **vide**, l'ingestion échoue avec un message explicite au lieu de laisser passer un index vide pour un succès.
+Le workflow vide d'abord la table (`DROP TABLE IF EXISTS n8n_vectors`) puis la reconstruit : l'opération est idempotente, sans doublon. Si `documents/` ne contient aucun fichier `.docx`, `.pdf` ou `.md`, l'ingestion échoue sur « No file(s) found » au lieu de laisser passer un index vide pour un succès.
 
 Les extraits portent leur position dans le document (`metadata.loc.lines.from`) : c'est ce qui permet de reconstituer le référentiel dans l'ordre pour l'extraction.
 
@@ -341,9 +343,9 @@ Mesures de la configuration de référence ; elles varient comme la vitesse de g
 
 | Mesure | Valeur |
 |---|---|
-| Analyse du corpus fictif (10 exigences) | **4 min 40 s** |
+| Analyse du corpus fictif (10 exigences) | **4 min 20 s à 4 min 50 s** (trois mesures) |
 | Génération | ~14 tokens/s (`granite4.2:8b` sous Ollama/Vulkan, iGPU) |
-| Ordre de grandeur par exigence | environ une demi-minute (4 min 40 s pour 10 exigences) |
+| Ordre de grandeur par exigence | environ une demi-minute |
 | Objectif sur un corpus réel | moins de 25 minutes |
 
 Le temps dépend surtout de la longueur des justifications et du nombre de recherches de l'agent, donc de la taille du corpus. Le texte de confirmation du formulaire annonce 10 à 20 minutes, ce qui couvre un corpus plus volumineux que le corpus fictif.
@@ -366,6 +368,7 @@ Ollama tourne avec `OLLAMA_NUM_PARALLEL=1` : **une seule requête à la fois**. 
 | Port 5679 déjà utilisé avec `n8n execute` | L'instance en cours occupe le port des runners | `-e N8N_RUNNERS_BROKER_PORT=5690`. |
 | Génération interminable, réponse vide | *Enable Thinking* actif sur le modèle Ollama | Le désactiver (section 4.4). |
 | Identifiants introuvables au déploiement | Noms par défaut (« Ollama account »…) | Renommer en `Ollama local`, `Postgres rag`, `Gmail SMTP`. |
+| Mail d'échec « Extraction des exigences impossible : sortie du modèle invalide après 3 tentatives » dès le début de l'analyse | Ollama arrêté ou injoignable : le nœud reçoit une erreur au lieu d'une réponse, et l'échec est rapporté comme une sortie invalide (constaté en arrêtant le service `ollama`) | `docker compose ps` : `ollama` doit être *healthy*. Relancer l'analyse. |
 
 ---
 
@@ -443,7 +446,7 @@ Mesures sur le corpus fictif :
 |---|---|
 | Score de `evaluate-report.mjs` | **10/10**, critères satisfaits |
 | Omissions (EX-09, EX-10) | détectées |
-| Durée de l'analyse | **4 min 40 s** |
+| Durée de l'analyse | **4 min 20 s à 4 min 50 s** |
 | Tests unitaires | 55 réussis |
 | Risques R1 à R4 | tous levés, aucun repli appliqué (section 9.1) |
 
@@ -481,11 +484,13 @@ Les documents sont confidentiels : seule une synthèse pseudonymisée sort de la
 | Noms des documents, chemin du rapport | **jamais** (seulement la date et l'heure) |
 | Message d'erreur brut | **jamais** |
 
-Exemple (corpus fictif, contrôle satisfait). L'intitulé « Inventaire des modèles pour Acme Défense » devient :
+Exemple tiré du workflow « 90 – Test synthèse » (contrôle satisfait). L'intitulé « Inventaire des modèles pour Acme Défense » devient :
 
 ```text
 EX-01 | Couverte | Inventaire des modèles pour [CLIENT]
 ```
+
+Sur le corpus fictif, les intitulés extraits par le modèle (« Inventaire des modèles », « Formation »…) ne contiennent en général aucun terme du dictionnaire : le tableau du mail est alors identique à celui du rapport.
 
 L'objet du mail est de la forme `[n8n] Analyse de conformité – <date> – <couvertes>/<total> couvertes`.
 
@@ -516,6 +521,16 @@ Si un workflow s'arrête sur une erreur non prévue, le workflow 04 envoie uniqu
 - le numéro de l'exécution à consulter dans n8n.
 
 **Jamais le message d'erreur** : il peut contenir des extraits de documents. Il reste dans l'historique des exécutions, sur la machine.
+
+Quand l'alerte part-elle ? n8n n'appelle un workflow d'erreur que pour une exécution **qui n'est pas manuelle** :
+
+| Lancement | Alerte 04 |
+|---|---|
+| Formulaire 02a, et les workflows 02 et 03 qu'il déclenche | ✅ |
+| Bouton *Execute workflow* de l'éditeur (01, 90, 91) | ❌ : n8n ne déclenche jamais de workflow d'erreur pour une exécution manuelle |
+| Ligne de commande `n8n execute` (sections 5.1 et 5.2) | ❌ en pratique : n8n tente l'appel, mais la commande se termine avant (« Cannot use a pool after calling end on the pool » dans la sortie) |
+
+Dans les deux derniers cas, l'erreur se lit dans la sortie de la commande ou dans *Executions*. Une ingestion lancée sur un dossier `documents/` vide s'arrête ainsi sur « No file(s) found » sans mail d'alerte.
 
 Les échecs prévus (document non indexé, aucune exigence extraite) passent, eux, par le workflow 03 en mode `echec`. Le motif y est une phrase construite par le code. Pour un document non indexé, elle ne contient que des comptes (« Document(s) demandé(s) non indexé(s) : N. Documents indexés : M. »), jamais de nom de document : les noms de fichiers portent des références que le dictionnaire ne couvre pas, et le détail se lit dans l'historique d'exécution n8n. La phrase reste pseudonymisée et soumise au même contrôle avant envoi. Le cas du référentiel trop long pour le contexte relève, lui, du workflow 04 (section 9.2).
 
