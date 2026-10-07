@@ -6,6 +6,17 @@ Ce tutoriel décrit la configuration d'Open WebUI appliquée à la stack `docker
 - **Configuration de référence** : les durées et débits cités ont été mesurés sur un Ryzen 7 7840HS avec iGPU Radeon 780M (profil `vulkan`) et 30 Go de RAM. Sur une autre machine, les **ordres de grandeur** changent, pas les réglages : la section 2 explique comment mesurer les vôtres.
 - **Modèles** : `granite4.2:8b` (chat, contexte 32k) et `bge-m3` (embeddings)
 - **Versions testées** : Open WebUI 0.11.4, Ollama (image `latest`, testée avec le backend Vulkan)
+- **Corpus d'exercice** : les deux documents fictifs de `n8n/exemples/` (cahier des charges et proposition du « Projet Héron »), fournis avec le dépôt. Les exemples chiffrés sur des rapports plus volumineux (142 extraits…) viennent du corpus du formateur, qui n'est pas distribué.
+
+### Prérequis
+
+| Élément | Détail |
+|---|---|
+| Docker | Docker Engine avec le plugin Compose v2 (`docker compose version`), ou Docker Desktop. Sous Windows, Docker Desktop avec le moteur WSL2. |
+| Mémoire | 16 Go de RAM au minimum, 32 Go conseillés : la stack complète (Ollama, Open WebUI, n8n, Postgres) et le modèle de chat se partagent la machine. |
+| Disque | ~25 Go libres : ~12 Go d'images Docker, ~6,5 Go pour les deux modèles, plus le modèle de code du tutoriel 04. |
+| Réseau | Nécessaire au premier démarrage (images et modèles). Ensuite, tout tourne en local. |
+| Dépôt | Cloné sur la machine. **Toutes les commandes `docker compose` de ce tutoriel et des suivants se lancent depuis le dossier `local-llm/`**, qui contient `docker-compose.yml` et `.env`. |
 
 ---
 
@@ -40,7 +51,7 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
 ## 2. Premier démarrage
 
-1. Créer le fichier de configuration : `cp .env.example .env`, puis remplacer les secrets (`openssl rand -hex 32`).
+1. Depuis le dossier `local-llm/`, créer le fichier de configuration : `cp .env.example .env`. Remplacer ensuite chaque `change-me` par une valeur aléatoire, générée par exemple avec `openssl rand -hex 32` (une valeur différente pour chaque secret).
 2. **Adapter la stack à la machine**, dans `.env` :
 
    | Machine | Ligne à décommenter dans `.env` | Vérification |
@@ -162,7 +173,7 @@ Ce texte est ajouté au début de chaque conversation. Chaque consigne corrige u
 | *If the information is missing, say so* | Encourage le modèle à avouer qu'il ne sait pas plutôt qu'à halluciner. Sans cette consigne, c'est le premier risque d'un RAG. |
 | *Cite sources as [n], never mention source tags* | Open WebUI encadre les extraits par des balises `<source id="…">`. Le modèle avait tendance à les recopier dans sa réponse (« based on `<source id="2">`… »). |
 
-Adapter le rôle (« MBSE expert ») au domaine des documents. La consigne est en anglais parce que les documents le sont, mais le modèle répond quand même dans la langue de la question.
+Adapter le rôle (« MBSE expert ») au domaine des documents. La consigne est en anglais parce que les documents d'origine l'étaient ; elle fonctionne aussi sur le corpus fictif en français, et le modèle répond dans la langue de la question.
 
 Valider avec **Save & Update**.
 
@@ -232,8 +243,10 @@ Joindre un fichier à une conversation l'indexe **pour cette conversation seulem
 
    > Le bouton *Create* crée l'élément de l'onglet affiché. Sur l'onglet *Models*, il crée un modèle, pas une base.
 
-2. Renseigner un **nom** et une **description**. La description est visible par le modèle et l'aide à savoir quand s'en servir : décrire le contenu (« Rapports et cahiers des charges sur l'impact de SysML v2… ») plutôt que l'usage.
-3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Avec un batch de 32, un document de 170 extraits est indexé en ~13 s sur la configuration de référence.
+2. Renseigner un **nom** et une **description**. La description est visible par le modèle et l'aide à savoir quand s'en servir : décrire le contenu plutôt que l'usage. Pour l'exercice : nom `MBSE Expert`, description « Cahier des charges et proposition technique du Projet Héron : migration SysML v1 vers SysML v2 chez Acme Défense ».
+3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Pour l'exercice, ajouter les deux fichiers du dossier `local-llm/n8n/exemples/` : `sow-exemple.md` et `Proposition – Projet Héron, v2.md` (pas `verite-terrain.json`, qui sert au tutoriel 03). Avec un batch de 32, un document de 170 extraits est indexé en ~13 s sur la configuration de référence ; les deux documents fictifs, très courts, le sont en quelques secondes.
+
+   > Le corpus fictif ne compte qu'une poignée d'extraits : Top K les transmet tous au modèle. Les limites du RAG décrites en section 5 n'apparaissent qu'avec des documents plus longs ; refaire l'exercice avec vos propres documents pour les observer.
 
 ### 6.2 Choisir le bon format de fichier
 
@@ -259,17 +272,19 @@ Exemple observé : dans un tableau comparatif extrait d'un PDF, le modèle a att
 Les extraits sont stockés dans la table `document_chunk` de la base `rag`. La colonne `collection_name` contient l'identifiant de la base de connaissances, ou `file-<id>` pour un fichier joint à une conversation.
 
 ```bash
-docker compose exec postgres psql -U "$POSTGRES_USER" -d rag -c "
+docker compose exec postgres psql -U n8n -d rag -c "
   SELECT collection_name, vmetadata->>'name' AS fichier, count(*) AS extraits
   FROM document_chunk GROUP BY 1, 2 ORDER BY 1;"
 ```
 
+`n8n` est l'utilisateur Postgres par défaut (`POSTGRES_USER` dans `.env`) : remplacer cette valeur si vous l'avez changée.
+
 Pour vérifier qu'un passage précis a été correctement extrait :
 
 ```bash
-docker compose exec postgres psql -U "$POSTGRES_USER" -d rag -c "
+docker compose exec postgres psql -U n8n -d rag -c "
   SELECT vmetadata->>'page', left(text, 300) FROM document_chunk
-  WHERE text ILIKE '%deliverable%' LIMIT 5;"
+  WHERE text ILIKE '%livrable%' LIMIT 5;"
 ```
 
 À noter : les fichiers joints aux conversations restent indexés dans leur propre collection même après la fin de la conversation.
@@ -280,13 +295,17 @@ docker compose exec postgres psql -U "$POSTGRES_USER" -d rag -c "
 
 Une réponse qui « a l'air bonne » ne suffit pas : il faut vérifier qu'elle est **complète** et **fidèle**. Pour cela, poser une série de questions qui testent chacune un aspect différent, et **cliquer sur les citations** sous chaque réponse pour lire les extraits transmis au modèle.
 
-| # | Type de question | Exemple | Ce qu'on vérifie |
-|---|---|---|---|
-| 1 | Un fait précis, dans un seul document | « Quels livrables sont demandés dans le SOW ? » | La recherche trouve le bon passage, et la liste est complète. |
-| 2 | Un terme exact (acronyme, nom propre, section) | « Que dit la section 4.3 ? » | La recherche par mots-clés (BM25) fonctionne. |
-| 3 | Une question qui demande plusieurs documents | « La proposition couvre-t-elle tous les livrables du SOW ? » | La recherche rapporte des extraits de plusieurs sources. |
-| 4 | Une relance | après la 3 : « et quels sont les risques ? » | La reformulation de la question (*Retrieval Query Generation*). |
-| 5 | **Une information absente des documents** | « Quel est le coût de licence par poste ? » | Le modèle dit qu'il ne sait pas. **C'est le test le plus important.** |
+Les exemples portent sur la base `MBSE Expert` créée en 6.1 avec le corpus fictif. Dans une conversation avec `granite4.2:8b`, taper `#`, choisir la base, puis poser la question.
+
+| # | Type de question | Exemple | Réponse attendue | Ce qu'on vérifie |
+|---|---|---|---|---|
+| 1 | Un fait précis, dans un seul document | « Quels livrables le cahier des charges demande-t-il ? » | Quatre : rapport d'inventaire (EX-01), plan de migration (EX-05), rapport final (EX-08), guide de modélisation mis à jour (EX-10). | La recherche trouve le bon passage, et la liste est complète. |
+| 2 | Un terme exact (référence, nom propre) | « Que demande l'exigence EX-04 ? » | Une formation de deux jours pour douze ingénieurs. | La recherche par mots-clés (BM25) fonctionne. |
+| 3 | Une question qui demande plusieurs documents | « La proposition de Novaltis couvre-t-elle l'exigence EX-04 ? » | Partiellement : la proposition prévoit une seule journée au lieu de deux. | La recherche rapporte des extraits des deux documents. |
+| 4 | Une relance | après la 3 : « et l'exigence EX-09 ? » | Non couverte : la proposition ne mentionne aucun support après le projet. | La reformulation de la question (*Retrieval Query Generation*). |
+| 5 | **Une information absente des documents** | « Quel est le coût de licence par poste ? » | Le modèle dit que l'information ne figure pas dans les documents. | **C'est le test le plus important.** |
+
+Un petit modèle ne réussit pas toujours les cinq du premier coup : c'est justement ce que le tableau suivant aide à diagnostiquer.
 
 ### Diagnostiquer une mauvaise réponse
 

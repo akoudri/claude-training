@@ -6,6 +6,7 @@ Ce tutoriel complète [Utiliser Claude Code dans VS Code avec le LLM local](04-c
 - **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291, nginx 1.29-alpine (passerelle), image `node:22`, Docker Compose. Le **CLI** et le **panneau de l'extension VS Code** `anthropic.claude-code` ont été testés dans le dev container : ouvert par « Reopen in Container », le panneau s'installe malgré l'absence d'Internet, s'ouvre sans écran de connexion et corrige l'exercice.
 - **Modèle** : `ornith-code` (variante à 64k de `ornith:9b`), créé comme à la section 2.3 du [tutoriel 04](04-claude-code-vscode-local.md#23-créer-ornith-code)
 - **Fichiers de l'exemple** : [`exemples/claude-code-devcontainer/`](../exemples/claude-code-devcontainer/)
+- **Prérequis** : le [tutoriel 04](04-claude-code-vscode-local.md) fait jusqu'à la section 4.0 (modèle `ornith-code` créé, projet d'essai `~/essai-claude-local`). Pour la partie B : VS Code avec l'extension **Dev Containers** (`ms-vscode-remote.remote-containers`), ou Node.js sur l'hôte pour la variante en ligne de commande. Les commandes `docker compose` se lancent depuis le dossier `local-llm/`.
 
 Sources officielles utilisées :
 
@@ -134,6 +135,8 @@ Dans une session, lancer `/sandbox`. Le panneau a trois onglets :
 | **Regular permissions** | `sandbox.autoAllowBashIfSandboxed: false` | Toutes les commandes passent par le flux de permissions habituel, même sandboxées : plus de contrôle, plus de validations. |
 
 Le choix est écrit dans `.claude/settings.local.json` du projet. Pour sandboxer tous les projets, mettre `sandbox.enabled` dans `~/.claude/settings.json`.
+
+**Pour essayer** sur le projet d'essai du tutoriel 04 (`~/essai-claude-local`, qui contient déjà le `.claude/settings.local.json` pointant vers Ollama) : lancer `claude`, taper `/sandbox` et choisir *Auto-allow*. Demander ensuite à l'agent de lancer les commandes Bash `curl -sI https://example.com`, puis `echo test > ~/sandbox-test.txt`. Le `curl` est bloqué ou fait l'objet d'une demande d'autorisation (à refuser), et l'écriture hors du projet échoue en « système de fichiers en lecture seule », comme dans les mesures de 2.6. Passer par une commande Bash est important : l'outil Write, lui, n'est pas sandboxé (2.1).
 
 Pour changer le sandbox le temps d'une session, sans écrire de fichier : `claude --settings '{"sandbox": {"enabled": true, "allowUnsandboxedCommands": false}}'`.
 
@@ -291,13 +294,13 @@ Dans le conteneur, `/workspace` n'est **pas un dépôt git** : le montage ne con
 
 ## 4. Les fichiers de l'exemple
 
-Dossier : `exemples/claude-code-devcontainer/`, plus `ollama-gateway/nginx.conf` et les services `ollama-gateway` et réseau `agents` de `docker-compose.yml` à la racine.
+Dossier : `local-llm/exemples/claude-code-devcontainer/`, plus `local-llm/ollama-gateway/nginx.conf` et, dans `local-llm/docker-compose.yml`, le service `ollama-gateway` et le réseau `agents`.
 
 | Fichier | Rôle |
 |---|---|
 | `.devcontainer/devcontainer.json` | Construction, réseau, volumes, variables, test de la passerelle au démarrage. |
 | `.devcontainer/Dockerfile` | Image : `node:22`, outils de base, Claude Code 2.1.291 figé. |
-| `ollama-gateway/nginx.conf` (racine du dépôt) | Les trois routes autorisées ; tout le reste en 403. |
+| `local-llm/ollama-gateway/nginx.conf` | Les trois routes autorisées ; tout le reste en 403. |
 | `slug.js`, `slug.test.js` | L'exercice : une fonction à corriger, trois tests. |
 
 ### 4.1 `devcontainer.json`
@@ -364,19 +367,19 @@ Par défaut, Docker Compose nomme un réseau `<dossier du projet>_<réseau>` : l
 
 ### 5.1 Ouvrir le conteneur
 
-1. Démarrer la stack depuis la racine du dépôt, **passerelle comprise** : `docker compose up -d`. Vérifier que `ollama-gateway` tourne (`docker compose ps`).
+1. Démarrer la stack depuis le dossier `local-llm/`, **passerelle comprise** : `docker compose up -d`. Vérifier que `ollama-gateway` tourne (`docker compose ps`).
 2. Vérifier que le modèle existe : `docker compose exec ollama ollama list` doit montrer `ornith-code`. Sinon, le créer comme au [tutoriel 04, 2.3](04-claude-code-vscode-local.md#23-créer-ornith-code).
-3. Ouvrir **le dossier** `exemples/claude-code-devcontainer` dans VS Code (et non la racine du dépôt).
+3. Ouvrir **le dossier** `local-llm/exemples/claude-code-devcontainer` dans VS Code (*File → Open Folder*), et non la racine du dépôt : VS Code ne trouverait pas le `.devcontainer/`.
 4. Palette de commandes : **Dev Containers: Reopen in Container**. La première construction télécharge l'image Node et installe Claude Code (c'est le seul moment où le réseau est utilisé).
 
 Variante en ligne de commande, sans VS Code :
 
 ```bash
-cd exemples/claude-code-devcontainer
+cd exemples/claude-code-devcontainer     # depuis local-llm/
 npm exec --yes --package=@devcontainers/cli -- devcontainer up --workspace-folder .
 ```
 
-Pour entrer ensuite dans le conteneur, `docker exec -it <conteneur> bash` fonctionne ; la sous-commande `devcontainer exec` du même outil existe aussi, mais elle n'a pas été utilisée ici.
+Pour entrer ensuite dans le conteneur : `docker ps --filter label=devcontainer.local_folder --format '{{.Names}}'` donne son nom, puis `docker exec -it -u node <conteneur> bash`. La sous-commande `devcontainer exec` du même outil existe aussi, mais elle n'a pas été utilisée ici.
 
 ### 5.2 Lire le message de démarrage
 
@@ -406,7 +409,7 @@ Ou en non interactif, sans validations :
 claude -p "Les tests de slug.test.js échouent. Corrige slugify dans slug.js pour que node --test passe, sans modifier les tests. Vérifie en lançant node --test." --dangerously-skip-permissions
 ```
 
-Le fichier `slug.js` du dossier de l'hôte est **modifié directement**, puisque l'espace de travail est monté en `bind`. Pour rejouer l'exercice, restaurer le fichier **sur l'hôte** : `git checkout -- exemples/claude-code-devcontainer/slug.js` depuis la racine du dépôt (`/workspace` n'est pas un dépôt git dans le conteneur).
+Le fichier `slug.js` du dossier de l'hôte est **modifié directement**, puisque l'espace de travail est monté en `bind`. Pour rejouer l'exercice, restaurer le fichier **sur l'hôte** : `git checkout -- local-llm/exemples/claude-code-devcontainer/slug.js` depuis la racine du dépôt (`/workspace` n'est pas un dépôt git dans le conteneur).
 
 **Quand `--dangerously-skip-permissions` est acceptable.** Avec cette conception, rien ne sort du conteneur sauf vers les trois routes de la passerelle, et le conteneur ne détient aucun identifiant réel (le jeton est le `ollama` factice) : il n'y a pas d'identifiants de Claude Code à protéger. Le risque qui reste est dans l'**espace de travail monté**. Conditions, ensemble :
 
@@ -477,7 +480,7 @@ Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 
 |---|---|
 | Ce que protège le sandbox | Les commandes Bash et leurs enfants : écriture limitée au projet, réseau filtré. |
 | Ce qu'il ne protège pas | Read/Edit/Write, MCP, hooks. |
-| Prérequis Linux | `bubblewrap`, `socat`, et le profil AppArmor sous Ubuntu 24.04+. |
+| Prérequis | Rien sous macOS. Linux et WSL2 : `bubblewrap`, `socat`, et le profil AppArmor sous Ubuntu 24.04+. |
 | Mode strict | `allowUnsandboxedCommands: false` **et** `failIfUnavailable: true`. |
 | Ce que protège le dev container | Tout le processus Claude Code, sur un réseau Docker `internal` : ni route Internet, ni DNS externe. |
 | Seule sortie | La passerelle `ollama-gateway` : `POST /v1/messages`, `POST /v1/messages/count_tokens`, `GET /api/version`. Le reste : 403. |

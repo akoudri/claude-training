@@ -7,6 +7,16 @@ Ce tutoriel décrit le démonstrateur n8n de ce dépôt : il compare un **docume
 - **Versions testées** : n8n 2.41.6, Postgres 16 + pgvector
 - **Corpus des exemples** : uniquement le corpus fictif de `n8n/exemples/` (SOW « Projet Héron », proposition du prestataire « Novaltis », 10 exigences dont 2 omissions volontaires)
 
+### Prérequis
+
+| Élément | Détail |
+|---|---|
+| Stack | Démarrée et configurée comme au [tutoriel 01](01-configuration-open-webui.md#2-premier-démarrage), section 2. |
+| Node.js 22 ou plus récent, sur l'hôte | Pour les tests, `build.mjs` et `deploy.sh` (`node --version`). Aucune dépendance npm à installer. |
+| Bash | Pour `deploy.sh` : Linux, macOS, ou WSL2 sous Windows. |
+| Un compte SMTP pour l'envoi des mails | Le tutoriel utilise Gmail (section 3.2). Tout autre serveur SMTP convient : seul le nom de l'identifiant dans n8n est imposé. |
+| Dossier de travail | **Toutes les commandes se lancent depuis le dossier `local-llm/`.** |
+
 ---
 
 ## 1. Workflow ou agent ?
@@ -125,7 +135,7 @@ Ouvrir http://localhost:5678 et créer le compte propriétaire.
 
 ### 3.2 Les trois identifiants
 
-Ils se créent dans l'interface (*Credentials → Create credential*) et ne sont jamais versionnés.
+Ils se créent dans l'interface de n8n (http://localhost:5678/home/credentials, bouton *Create credential*) et ne sont jamais versionnés.
 
 > **Le nom compte.** n8n donne des noms par défaut (« Ollama account », « Postgres account »…), mais `deploy.sh` retrouve les identifiants **par leur nom exact**. Renommez-les comme ci-dessous, sinon le déploiement s'arrête avec « Identifiants à créer dans n8n avant le déploiement ».
 
@@ -133,7 +143,7 @@ Ils se créent dans l'interface (*Credentials → Create credential*) et ne sont
 |---|---|---|
 | `Ollama local` | Ollama | URL de base : `http://ollama:11434` |
 | `Postgres rag` | Postgres | Hôte `postgres`, port `5432`, base `rag`, utilisateur et mot de passe de `POSTGRES_USER` / `POSTGRES_PASSWORD` dans `.env`, SSL désactivé |
-| `Gmail SMTP` | SMTP | Hôte `smtp.gmail.com`, port `465`, SSL/TLS activé, utilisateur = l'adresse Gmail, mot de passe = **mot de passe d'application** |
+| `Gmail SMTP` | SMTP | Hôte `smtp.gmail.com`, port `465`, SSL/TLS activé, utilisateur = l'adresse Gmail, mot de passe = **mot de passe d'application**. Avec un autre fournisseur, saisir ses propres hôte, port et identifiants, mais **garder le nom `Gmail SMTP`**. |
 
 Pourquoi `postgres` et `ollama` comme noms d'hôte : n8n tourne dans le réseau Docker de la stack, il joint les autres conteneurs par le nom de leur service. `localhost` désignerait le conteneur n8n lui-même.
 
@@ -145,8 +155,8 @@ Gmail refuse la connexion SMTP avec le mot de passe habituel du compte. n8n doit
 2. **Ouvrir la page des mots de passe d'application.** Allez sur <https://myaccount.google.com/apppasswords>. Google peut redemander le mot de passe du compte.
 3. **Créer le mot de passe.** Dans « Nom de l'application », saisissez un nom parlant, par exemple `n8n conformite`, puis cliquez sur **Créer**.
 4. **Copier le code affiché.** Il est présenté en 4 groupes de 4 lettres et n'est affiché **qu'une seule fois**. S'il est perdu, il faut en générer un nouveau.
-5. **Le coller dans n8n.** Ouvrez `/home/credentials` et l'identifiant `Gmail SMTP`. Collez le code dans le champ *Password*, sans les espaces. Dans *User*, mettez l'adresse Gmail complète. Cliquez ensuite sur **Save** : n8n teste la connexion.
-6. **Vérifier.** Lancez le workflow de test 90 (section 2) et contrôlez que le mail arrive.
+5. **Le coller dans n8n.** Ouvrez http://localhost:5678/home/credentials et l'identifiant `Gmail SMTP`. Collez le code dans le champ *Password*, sans les espaces. Dans *User*, mettez l'adresse Gmail complète. Cliquez ensuite sur **Save** : n8n teste la connexion.
+6. **Vérifier.** Une fois les workflows déployés (section 4), lancez le workflow « 90 – Test synthèse » (section 2.1) et contrôlez que le mail arrive.
 
 | Situation | Cause et solution |
 |---|---|
@@ -167,8 +177,8 @@ cp n8n/config/notification.example.json n8n/config/notification.json
 
 | Champ | Rôle |
 |---|---|
-| `destinataire` | Adresse qui reçoit la synthèse et les alertes. |
-| `expediteur` | Adresse Gmail de l'identifiant `Gmail SMTP`. |
+| `destinataire` | Adresse qui reçoit la synthèse et les alertes : la vôtre, pour l'exercice. |
+| `expediteur` | Adresse de l'identifiant `Gmail SMTP` (l'adresse Gmail, ou celle de votre compte SMTP). |
 
 Le fichier est exclu de git. Si un champ manque, le workflow 03 s'arrête avec « notification.json incomplet ». Si le fichier est absent, les workflows 03 et 04 échouent tous les deux : aucun mail ne partira.
 
@@ -224,7 +234,7 @@ Deux autres nœuds sont désactivés par défaut dans n8n 2.x : *Local File Trig
 ### 4.1 Tester, construire, déployer
 
 ```bash
-node --test "n8n/test/**/*.test.*"     # 48 tests, sans dépendance npm
+node --test "n8n/test/**/*.test.*"     # 55 tests, sans dépendance npm
 node n8n/scripts/build.mjs             # régénère n8n/workflows/*.json (sans identifiant)
 bash n8n/scripts/deploy.sh             # identifiants, build, import, publication, redémarrage
 ```
@@ -315,9 +325,15 @@ Ouvrir le formulaire : http://localhost:5678/form/analyse-conformite
 | Document référentiel | `sow-exemple.md` |
 | Document analysé | `Proposition – Projet Héron, v2.md` |
 
-Les noms sont ceux de `documents/`, **exactement** (espaces, tiret long, accent et virgule compris). Le formulaire répond tout de suite : l'analyse continue en arrière-plan. À la fin, un rapport apparaît dans `reports/` (`conformite-AAAA-MM-JJ-HHMM.md`) et le mail de synthèse part.
+Les noms sont ceux de `documents/`, **exactement** (espaces, tiret long, accent et virgule compris) : le plus sûr est de les copier depuis la sortie de `ls documents/`. Le formulaire répond tout de suite : l'analyse continue en arrière-plan. À la fin, un rapport apparaît dans `reports/` (`conformite-AAAA-MM-JJ-HHMM.md`) et le mail de synthèse part.
 
-Sans navigateur, le workflow « 91 – Test analyse » lance la même analyse sur le corpus fictif.
+Sans navigateur, le workflow « 91 – Test analyse » lance la même analyse sur le corpus fictif :
+
+```bash
+docker compose exec -T -e N8N_RUNNERS_BROKER_PORT=5690 n8n n8n execute --id=cnfTestAnaly0091 2>&1 | grep -v -i warn | tail -20
+```
+
+La commande attend la fin de l'analyse (plusieurs minutes), puis le rapport apparaît dans `reports/`. Les documents du corpus fictif doivent avoir été indexés (5.1).
 
 ### 5.3 Durées mesurées
 
@@ -428,7 +444,7 @@ Mesures sur le corpus fictif :
 | Score de `evaluate-report.mjs` | **10/10**, critères satisfaits |
 | Omissions (EX-09, EX-10) | détectées |
 | Durée de l'analyse | **4 min 40 s** |
-| Tests unitaires | 48 réussis |
+| Tests unitaires | 55 réussis |
 | Risques R1 à R4 | tous levés, aucun repli appliqué (section 9.1) |
 
 ### 7.2 Corpus réel

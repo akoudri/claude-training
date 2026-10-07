@@ -2,7 +2,7 @@
 
 Ce guide explique comment assembler un **assistant spécialisé** (un « agent ») dans Open WebUI 0.11 : un modèle, des consignes, une base de documents et, si besoin, des outils. Il prend pour exemple l'assistant **Expert MBSE** construit sur `granite4.2:8b` et la base **MBSE Expert**.
 
-Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG).
+Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG). Les réglages du tutoriel 01 sont supposés faits, et la base **MBSE Expert** créée avec le corpus fictif (tutoriel 01, section 6.1). Les commandes `docker compose` se lancent depuis le dossier `local-llm/`.
 
 ---
 
@@ -48,9 +48,11 @@ Un assistant référence des bases et des outils : il faut donc **les créer ava
 
 **Workspace → Knowledge → Create**
 
+> Si la base `MBSE Expert` existe déjà (tutoriel 01, section 6.1), passez à l'étape 2.
+
 1. **Nom** : `MBSE Expert`.
-2. **Description** : décrivez le **contenu** (« Rapports, cahiers des charges et cadres méthodologiques sur SysML v2 et le MBSE chez Acme Défense »). Elle aide les utilisateurs à choisir la bonne base, et le modèle à décider de la consulter en mode Native (voir 5.4).
-3. **Ajouter les documents** par glisser-déposer, ou avec le bouton **+** de la base. Attendez la fin de l'indexation de chaque fichier.
+2. **Description** : décrivez le **contenu** (« Cahier des charges et proposition technique du Projet Héron : migration SysML v1 vers SysML v2 chez Acme Défense »). Elle aide les utilisateurs à choisir la bonne base, et le modèle à décider de la consulter en mode Native (voir 5.4).
+3. **Ajouter les documents** par glisser-déposer, ou avec le bouton **+** de la base : pour l'exercice, `sow-exemple.md` et `Proposition – Projet Héron, v2.md`, du dossier `local-llm/n8n/exemples/`. Attendez la fin de l'indexation de chaque fichier.
 
 | Bonne pratique | Pourquoi |
 |---|---|
@@ -75,6 +77,8 @@ Un outil est une fonction que le modèle peut décider d'appeler : interroger un
 - les **Valves** sont des réglages modifiables depuis l'interface (URL, clé d'API…), sans toucher au code.
 
 Exemple : un outil qui transmet une question à un workflow n8n de la stack. Open WebUI et n8n sont sur le même réseau Docker, et n8n y est joignable sous le nom `n8n`.
+
+> **Exemple illustratif.** Le dépôt ne fournit pas de workflow sur le chemin `mbse`. Pour essayer l'outil de bout en bout, créez dans n8n un workflow qui commence par un nœud *Webhook* (méthode `POST`, chemin `mbse`, réponse renvoyée par le dernier nœud) et publiez-le. Sinon, l'appel de l'outil échouera avec une erreur 404 : vous pouvez aussi sauter cette étape facultative.
 
 ```python
 """
@@ -215,10 +219,10 @@ Ouvrez une **nouvelle conversation** à chaque test, pour que l'historique d'un 
 
 | Test | Avec | Attendu |
 |---|---|---|
-| Question sur les documents, **sans `#`** : « Quel est le rôle de Novaltis dans le Projet Héron ? » | Expert MBSE | Indication « recherche dans la base » pendant le traitement, réponse citée [n], sources affichées sous la réponse. |
+| Question sur les documents, **sans `#`** : « Quel est le rôle de Novaltis dans le Projet Héron ? » | Expert MBSE | Indication « recherche dans la base » pendant le traitement. Réponse citée [n] : Novaltis est le prestataire qui répond au cahier des charges d'Acme Défense. Sources affichées sous la réponse. |
 | Information absente : « Quel est le coût de licence par poste ? » | Expert MBSE | Le modèle dit que l'information manque. |
 | Question générale : « Différence entre SysML v1 et v2 en 5 points » | `granite4.2:8b` | Réponse tirée de ses connaissances, sans refus. |
-| Demande qui nécessite un outil | Expert MBSE (avec outil) | L'outil est appelé (indiqué dans le statut), et son résultat est utilisé. |
+| Demande qui nécessite un outil (seulement si vous avez créé l'outil et son workflow, 4.1) : « Lance le workflow d'analyse MBSE sur l'exigence EX-04 » | Expert MBSE (avec outil) | L'outil est appelé (indiqué dans le statut), et son résultat est utilisé. |
 
 La série complète de questions de test et le tableau de diagnostic figurent dans le [guide de configuration, §7](01-configuration-open-webui.md#7-tester-le-rag).
 
@@ -226,7 +230,7 @@ La série complète de questions de test et le tableau de diagnostic figurent da
 
 ## 7. Vérifier par la ligne de commande
 
-Les commandes ci-dessous sont à lancer depuis la racine du dépôt.
+Les commandes ci-dessous sont à lancer depuis le dossier `local-llm/`.
 
 **L'assistant est-il bien configuré ?** La base est-elle rattachée, et le mode est-il Legacy ?
 
@@ -246,14 +250,14 @@ Un `knowledge = []` signifie que la sélection n'a pas été enregistrée : le c
 **Combien d'extraits par document ?** (remplacer l'identifiant par celui de la base)
 
 ```bash
-docker compose exec postgres psql -U "$POSTGRES_USER" -d rag -c "
+docker compose exec postgres psql -U n8n -d rag -c "
   SELECT vmetadata->>'name' AS fichier, count(*) AS extraits
   FROM document_chunk
   WHERE collection_name = '<id-de-la-base>'
   GROUP BY 1 ORDER BY 1;"
 ```
 
-L'identifiant de la base figure dans l'URL de sa page (*Workspace → Knowledge → MBSE Expert*).
+L'identifiant de la base figure dans l'URL de sa page (*Workspace → Knowledge → MBSE Expert*). `n8n` est l'utilisateur Postgres par défaut (`POSTGRES_USER` dans `.env`).
 
 **La recherche a-t-elle eu lieu ?** Pendant une question, la longueur du prompt dans les logs d'Ollama doit dépasser quelques milliers de tokens (prompt système + ~8 extraits) :
 

@@ -25,8 +25,9 @@ Sources officielles utilisées (les réglages cités y ont été vérifiés) :
 
 | Élément | Détail |
 |---|---|
-| Stack démarrée | `docker compose up -d`, puis `docker compose ps` : le service `ollama` doit être *healthy*. Le port est lié à `127.0.0.1:11434` : l'API n'est joignable que depuis la machine. |
-| CLI Claude Code | `curl -fsSL https://claude.ai/install.sh | bash`, puis `claude --version`. |
+| Stack démarrée | Comme au [tutoriel 01](01-configuration-open-webui.md#2-premier-démarrage), section 2. Depuis `local-llm/` : `docker compose up -d`, puis `docker compose ps` : le service `ollama` doit être *healthy*. Le port est lié à `127.0.0.1:11434` : l'API n'est joignable que depuis la machine. |
+| CLI Claude Code | Linux, macOS, WSL2 : `curl -fsSL https://claude.ai/install.sh \| bash`. Windows (PowerShell) : `irm https://claude.ai/install.ps1 \| iex`. Puis `claude --version`. |
+| Espace disque | ~6 Go de plus pour le modèle `ornith:9b` (section 2.3). |
 | VS Code | Version **1.94.0 ou plus récente** (prérequis donné par la page de l'extension). |
 | Extension | `anthropic.claude-code` (Extensions → « Claude Code »). Elle embarque sa propre copie du CLI pour le panneau de chat : le CLI autonome n'est nécessaire que pour lancer `claude` dans le terminal intégré. |
 
@@ -72,6 +73,8 @@ Deux enseignements :
 `granite4.2:8b` reste le modèle de chat d'Open WebUI et de n8n. Dans une boucle d'agent de code, il aboutit à un code correct mais ne conclut pas : l'agent ne rend jamais la main.
 
 ### 2.3 Créer `ornith-code`
+
+Depuis le dossier `local-llm/` :
 
 ```bash
 docker compose exec ollama ollama pull ornith:9b
@@ -197,12 +200,25 @@ Les guides de fournisseurs de la documentation placent la configuration dans `~/
 
 ## 4. Premier usage
 
+### 4.0 Préparer un projet d'essai
+
+L'exercice de la section 2.2 est fourni avec le dépôt (`exemples/claude-code-devcontainer/slug.js` et `slug.test.js`). Travaillez sur une **copie**, hors du dépôt, pour que les modifications de l'agent et le fichier `.claude/settings.local.json` ne s'y retrouvent pas. Depuis `local-llm/` :
+
+```bash
+mkdir -p ~/essai-claude-local
+cp exemples/claude-code-devcontainer/slug.js exemples/claude-code-devcontainer/slug.test.js ~/essai-claude-local/
+cd ~/essai-claude-local && git init -q && git add . && git commit -qm "exercice initial"
+node --test        # 2 tests sur 3 échouent : c'est le point de départ
+```
+
+Créez ensuite dans ce dossier le fichier `.claude/settings.local.json` de la section 3.2, et ajoutez `.claude/settings.local.json` à son `.gitignore`. Pour rejouer l'exercice : `git checkout -- slug.js`.
+
 ### 4.1 Dans VS Code
 
 1. Ouvrir le dossier du projet (celui qui contient `.claude/settings.local.json`).
 2. Vérifier que `claudeCode.disableLoginPrompt` est coché dans les réglages VS Code (3.5) : sinon le panneau affiche l'écran de connexion Anthropic. Ouvrir le panneau Claude Code, et accepter la confiance de l'espace de travail si elle est demandée.
 3. Lancer `/status` pour contrôler l'adresse de l'API et le modèle, et `/model` pour confirmer que le modèle actif est `ornith-code`.
-4. Envoyer une première demande **courte et ciblée**, par exemple celle de la section 2.2 sur un petit projet de test.
+4. Envoyer une première demande **courte et ciblée**, par exemple celle de la section 2.2 sur le projet d'essai ci-dessous.
 
 > `/status` et `/model` sont des commandes de session. Les références locales confirment que `/model` prend le pas sur `ANTHROPIC_MODEL` ; elles ne détaillent pas l'affichage exact de `/status`.
 

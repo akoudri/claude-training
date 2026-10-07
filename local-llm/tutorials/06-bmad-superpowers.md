@@ -72,12 +72,14 @@ On **n'installe pas** `bmad-build`, `bmad-build-auto`, `bmad-code-review` ni `bm
 
 ### 2.1 Prérequis
 
-| Élément | Vérification |
+Ce tutoriel ne dépend pas de la stack `local-llm` : il utilise Claude avec un compte Anthropic.
+
+| Élément | Installation et vérification |
 |---|---|
-| Claude Code | `claude --version` |
-| superpowers | plugin installé depuis le marketplace officiel ; `/plugin` le liste |
+| Claude Code, connecté à un compte Anthropic (abonnement ou clé d'API) | `claude --version`. L'exercice consomme des tokens : environ 5 $ en API pour les deux phases mesurées (section 6). |
+| superpowers | Dans Claude Code : `/plugin install superpowers@claude-plugins-official`, puis redémarrer la session. `/plugin` doit le lister. |
 | Node.js + npm (pour `npx skills`) | `node -v` |
-| `uv` (scripts Python de BMAD) | `uv --version`. **Obligatoire** : sans `uv`, `bmad setup` s'arrête. |
+| `uv` (scripts Python de BMAD) | `curl -LsSf https://astral.sh/uv/install.sh \| sh`, puis `uv --version`. **Obligatoire** : sans `uv`, `bmad setup` s'arrête. |
 | Git | le dépôt du projet doit être initialisé (`git init`) |
 
 ### 2.2 Installer BMAD de façon sélective
@@ -185,11 +187,11 @@ EOF
 printf 'node_modules/\n.worktrees/\n.claude/worktrees/\n' > .gitignore
 ```
 
-Ensuite :
-1. installez BMAD comme en 2.2 ;
-2. créez le `CLAUDE.md` de la section 2.3 ;
-3. lancez `bmad setup` ;
-4. committez.
+Ensuite, toujours dans le dossier `acme-salles` :
+1. installez BMAD avec la commande `npx skills add` de la section 2.2 ;
+2. créez le fichier `CLAUDE.md` avec le bloc de la section 2.3 ;
+3. ouvrez Claude Code (`claude`) et demandez « Lance bmad setup » ;
+4. committez : `git add -A && git commit -m "chore: install BMAD"`.
 
 ### 4.2 Planifier avec BMAD
 
@@ -227,7 +229,7 @@ _bmad-output/initiative-acme-salles/
     └── tickets.toml                             # 5 stories, dans l'ordre de construction
 ```
 
-Le découpage obtenu :
+Le découpage obtenu pendant le test est donné ci-dessous. **Le vôtre sera différent** : un LLM ne produit pas deux fois la même spec. Les noms de dossiers (`initiative-acme-salles`, `epic-reservation-salles`), le nombre de stories et leurs références peuvent changer. Lisez les vôtres dans `_bmad-output/` et dans la sortie de `tickets.py next`, et remplacez-les dans les commandes qui suivent.
 
 | Ref | Story | Couvre | Après |
 |---|---|---|---|
