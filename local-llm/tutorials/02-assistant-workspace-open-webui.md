@@ -2,7 +2,7 @@
 
 Ce guide explique comment assembler un **assistant spécialisé** (un « agent ») dans Open WebUI 0.11 : un modèle, des consignes, une base de documents et, si besoin, des outils. Il prend pour exemple l'assistant **Expert MBSE** construit sur `granite4.2:8b` et la base **MBSE Expert**.
 
-Il fait suite à [Configurer Open WebUI pour un LLM local sur iGPU](configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG).
+Il fait suite à [Configurer Open WebUI pour un LLM local sur iGPU](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG).
 
 ---
 
@@ -149,7 +149,7 @@ information is missing, say so explicitly. Cite sources as [n] and never mention
 source tags.
 ```
 
-Le rôle de chaque consigne est expliqué dans le [guide de configuration, §3.3](configuration-open-webui.md#33-system-prompt).
+Le rôle de chaque consigne est expliqué dans le [guide de configuration, §3.3](01-configuration-open-webui.md#33-system-prompt).
 
 ### 5.2 Advanced Params
 
@@ -220,7 +220,7 @@ Ouvrez une **nouvelle conversation** à chaque test, pour que l'historique d'un 
 | Question générale : « Différence entre SysML v1 et v2 en 5 points » | `granite4.2:8b` | Réponse tirée de ses connaissances, sans refus. |
 | Demande qui nécessite un outil | Expert MBSE (avec outil) | L'outil est appelé (indiqué dans le statut), et son résultat est utilisé. |
 
-La série complète de questions de test et le tableau de diagnostic figurent dans le [guide de configuration, §7](configuration-open-webui.md#7-tester-le-rag).
+La série complète de questions de test et le tableau de diagnostic figurent dans le [guide de configuration, §7](01-configuration-open-webui.md#7-tester-le-rag).
 
 ---
 

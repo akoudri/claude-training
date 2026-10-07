@@ -1,8 +1,8 @@
 # Isoler l'agent de code : sandbox Claude Code et dev container
 
-Ce tutoriel complète [Utiliser Claude Code dans VS Code avec le LLM local](claude-code-vscode-local.md). Un agent de code exécute des commandes et modifie des fichiers sur la base de ce que raconte un modèle de 9B : il faut décider **ce qu'il peut toucher**. Deux mécanismes sont décrits, avec ce que chacun isole et ce qu'il laisse passer, puis testés avec le modèle `ornith-code` de la stack de ce dépôt.
+Ce tutoriel complète [Utiliser Claude Code dans VS Code avec le LLM local](04-claude-code-vscode-local.md). Un agent de code exécute des commandes et modifie des fichiers sur la base de ce que raconte un modèle de 9B : il faut décider **ce qu'il peut toucher**. Deux mécanismes sont décrits, avec ce que chacun isole et ce qu'il laisse passer, puis testés avec le modèle `ornith-code` de la stack de ce dépôt.
 
-- **Machine cible** : celle de [`configuration-open-webui.md`](configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan)
+- **Machine cible** : celle de [`configuration-open-webui.md`](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan)
 - **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291, nginx 1.29-alpine (passerelle), image `node:22`, Docker Compose. Le **CLI** et le **panneau de l'extension VS Code** `anthropic.claude-code` ont été testés dans le dev container : ouvert par « Reopen in Container », le panneau s'installe malgré l'absence d'Internet, s'ouvre sans écran de connexion et corrige l'exercice.
 - **Modèle** : `ornith-code` (variante à 64k de `ornith:9b`), créé comme au chapitre 2 du tutoriel précédent
 - **Fichiers de l'exemple** : [`exemples/claude-code-devcontainer/`](../exemples/claude-code-devcontainer/)
@@ -319,7 +319,7 @@ Variables du conteneur (`containerEnv`) :
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1` | Pas de télémétrie, de rapports d'erreur ni de mise à jour. |
 | `DISABLE_AUTOUPDATER` | `1` | Pas de mise à jour automatique. |
 
-> **Piège rencontré** : Claude Code ne connaît pas `ornith-code` et suppose une fenêtre de 200k tokens. Sans `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, il ne compacte pas à temps et Ollama tronque le prompt en silence. Première exécution dans le dev container **sans** la variable : timeout de 25 min, 0 test sur 3. **Avec** : 3/3 en 78 s (accès direct) puis 114 s (via la passerelle). Détails dans le [tutoriel 1, 3.2](claude-code-vscode-local.md#32-le-bloc-env-complet). Le défaut est **65536** ; si `CLAUDE_LOCAL_MODEL` désigne un modèle d'un autre `num_ctx`, exporter aussi `CLAUDE_LOCAL_CONTEXT`.
+> **Piège rencontré** : Claude Code ne connaît pas `ornith-code` et suppose une fenêtre de 200k tokens. Sans `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, il ne compacte pas à temps et Ollama tronque le prompt en silence. Première exécution dans le dev container **sans** la variable : timeout de 25 min, 0 test sur 3. **Avec** : 3/3 en 78 s (accès direct) puis 114 s (via la passerelle). Détails dans le [tutoriel 1, 3.2](04-claude-code-vscode-local.md#32-le-bloc-env-complet). Le défaut est **65536** ; si `CLAUDE_LOCAL_MODEL` désigne un modèle d'un autre `num_ctx`, exporter aussi `CLAUDE_LOCAL_CONTEXT`.
 
 ### 4.2 `Dockerfile`
 
@@ -357,7 +357,7 @@ Docker Compose nomme le réseau `<dossier du projet>_<réseau>`. Le dépôt s'ap
 ### 5.1 Ouvrir le conteneur
 
 1. Démarrer la stack depuis la racine du dépôt, **passerelle comprise** : `docker compose up -d`. Vérifier que `ollama-gateway` tourne (`docker compose ps`).
-2. Vérifier que le modèle existe : `docker compose exec ollama ollama list` doit montrer `ornith-code`. Sinon, le créer comme au [tutoriel 1, 2.3](claude-code-vscode-local.md#23-créer-ornith-code).
+2. Vérifier que le modèle existe : `docker compose exec ollama ollama list` doit montrer `ornith-code`. Sinon, le créer comme au [tutoriel 1, 2.3](04-claude-code-vscode-local.md#23-créer-ornith-code).
 3. Ouvrir **le dossier** `exemples/claude-code-devcontainer` dans VS Code (et non la racine du dépôt).
 4. Palette de commandes : **Dev Containers: Reopen in Container**. La première construction télécharge l'image Node et installe Claude Code (c'est le seul moment où le réseau est utilisé).
 
@@ -481,6 +481,6 @@ Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 
 
 ### Pour aller plus loin
 
-- **Configurer Claude Code pour le modèle local** : [tutoriel 1](claude-code-vscode-local.md).
-- **Cohabitation avec Open WebUI et n8n** : [`agent-n8n.md`](agent-n8n.md), section 5.4 ; une seule requête à la fois sur le GPU.
+- **Configurer Claude Code pour le modèle local** : [tutoriel 1](04-claude-code-vscode-local.md).
+- **Cohabitation avec Open WebUI et n8n** : [`agent-n8n.md`](03-agent-n8n.md), section 5.4 ; une seule requête à la fois sur le GPU.
 - **Comparer les approches d'isolation** : https://code.claude.com/docs/en/sandbox-environments (page citée par la documentation du sandbox, non consultée ici).

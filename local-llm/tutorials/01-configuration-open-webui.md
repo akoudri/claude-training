@@ -40,13 +40,25 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 ## 2. Premier démarrage
 
 1. Lancer la stack : `cp .env.example .env` (éditer les secrets), puis `docker compose up -d`.
-2. Ouvrir http://localhost:3000 et créer le compte. **Le premier compte créé devient administrateur.**
-3. Vérifier que le modèle est chargé à 100 % sur le GPU :
+2. Attendre le téléchargement des modèles. Il n'y a rien à installer à la main : le service `ollama-init` télécharge `LLM_MODEL` et `EMBED_MODEL` (définis dans `.env`) dès qu'Ollama est prêt, puis s'arrête. Au premier lancement, cela représente ~6,5 Go et prend plusieurs minutes. Les lancements suivants sont immédiats, car les modèles restent dans le volume `ollama`.
+
+   ```bash
+   docker compose logs -f ollama-init         # progression ; se termine par "success"
+   docker compose ps -a ollama-init           # doit afficher "Exited (0)"
+   docker compose exec ollama ollama list     # granite4.2:8b et bge-m3 doivent apparaître
+   ```
+
+   Si `ollama-init` s'arrête avec un code différent de 0 (coupure réseau, nom de modèle erroné dans `.env`), corriger la cause puis relancer le téléchargement avec `docker compose up ollama-init`.
+
+3. Ouvrir http://localhost:3000 et créer le compte. **Le premier compte créé devient administrateur.** Si la liste des modèles est vide, le téléchargement n'est pas terminé (étape 2) : recharger la page une fois qu'il est fini.
+4. Envoyer un premier message (par exemple « Bonjour ») pour charger le modèle, puis vérifier qu'il tourne à 100 % sur le GPU :
 
    ```bash
    docker compose exec ollama ollama ps
    # PROCESSOR doit afficher "100% GPU"
    ```
+
+   Ollama ne charge un modèle en mémoire qu'à la première requête. Avant, `ollama ps` affiche une liste vide, ce qui ne veut pas dire que le modèle est absent : c'est `ollama list` qui indique les modèles installés.
 
 > ⚠️ **PersistentConfig** : au premier démarrage, Open WebUI copie les variables d'environnement (`RAG_TOP_K`, `CHUNK_SIZE`…) dans sa base (`webui.db`). Ensuite, **c'est la base qui fait foi**. Modifier `docker-compose.yml` n'a plus d'effet sur ces réglages : il faut passer par l'interface d'administration.
 
@@ -97,11 +109,11 @@ En mode *Function Calling: Native*, chaque outil intégré activé (mémoire, no
 
 Builtin Tools désactivé, les fichiers joints à la conversation et les bases appelées par `#` passent par le RAG classique : Open WebUI recherche lui-même les extraits pertinents et les place dans le prompt.
 
-> ⚠️ Ce n'est **pas** le cas d'une base **rattachée à un assistant** du Workspace. En mode Native, celle-ci n'est consultable que par l'outil intégré `query_knowledge_files`. Un assistant documentaire doit donc passer en *Function Calling: Legacy*. Voir [Créer un assistant dans le Workspace, §5.4](assistant-workspace-open-webui.md#54-le-choix-décisif--legacy-ou-native).
+> ⚠️ Ce n'est **pas** le cas d'une base **rattachée à un assistant** du Workspace. En mode Native, celle-ci n'est consultable que par l'outil intégré `query_knowledge_files`. Un assistant documentaire doit donc passer en *Function Calling: Legacy*. Voir [Créer un assistant dans le Workspace, §5.4](02-assistant-workspace-open-webui.md#54-le-choix-décisif--legacy-ou-native).
 
 ### 3.3 System Prompt
 
-> **Où le mettre** : laissez le System Prompt du **modèle de base vide**. Une consigne comme « answer only from the provided context » s'appliquerait à toutes les conversations, et le modèle refuserait les questions générales. Placez-la dans un **assistant** du Workspace (*Workspace → Models*), comme décrit dans [Créer un assistant dans le Workspace](assistant-workspace-open-webui.md). Le texte et son explication ci-dessous restent valables.
+> **Où le mettre** : laissez le System Prompt du **modèle de base vide**. Une consigne comme « answer only from the provided context » s'appliquerait à toutes les conversations, et le modèle refuserait les questions générales. Placez-la dans un **assistant** du Workspace (*Workspace → Models*), comme décrit dans [Créer un assistant dans le Workspace](02-assistant-workspace-open-webui.md). Le texte et son explication ci-dessous restent valables.
 
 Prompt utilisé pour l'assistant documentaire :
 
@@ -163,14 +175,14 @@ Valider avec **Save**.
 | **Markdown Header Text Splitter** | On | Découpe d'abord le document selon ses titres, puis selon la taille. Les extraits respectent ainsi la structure (sections, sous-sections). |
 | **Hybrid Search** | On | Combine la recherche par mots-clés (BM25) et la recherche sémantique (vecteurs). Le BM25 retrouve les termes exacts (acronymes, références comme « SysML v2 » ou « §4.2 »), là où la recherche sémantique seule échoue souvent sur du contenu technique. |
 | **Top K** | **8** | Nombre d'extraits injectés dans le prompt. À 5 (valeur par défaut, ~1 250 tokens), une question sur les livrables d'un cahier des charges a oublié le principal : le tableau des livrables était coupé en deux extraits, et un des 5 extraits était occupé par la table des matières. À 8 (~2 000 tokens), il faut compter ~4 s de lecture en plus par question, contre une bien meilleure couverture des listes et des tableaux. Au-delà de 10, le gain diminue et un modèle de 8B se perd dans trop de contexte. |
-| **Relevance Threshold** | 0 | Aucun filtrage par score : les 5 meilleurs extraits sont toujours transmis. |
+| **Relevance Threshold** | 0 | Aucun filtrage par score : les 8 meilleurs extraits (Top K) sont toujours transmis. |
 
 ### Limite du RAG : questions ciblées ou résumé global
 
-Le RAG ne transmet au modèle que les **5 extraits les plus pertinents**, par exemple 5 sur les 142 d'un rapport.
+Le RAG ne transmet au modèle que les **8 extraits les plus pertinents** (Top K), par exemple 8 sur les 142 d'un rapport.
 
 - ✅ **Questions ciblées** (« que recommande le rapport pour les profils L2 et L3 ? ») : c'est le cas d'usage idéal.
-- ⚠️ **Résumé global** (« résume ce document ») : le modèle ne voit qu'environ 4 % du texte et le résumé sera partiel.
+- ⚠️ **Résumé global** (« résume ce document ») : le modèle ne voit qu'environ 6 % du texte et le résumé sera partiel.
 
 Pour un résumé, cliquer sur le fichier joint et choisir l'option qui utilise **le document entier** (*full context*). Le contenu complet est alors injecté, à deux conditions :
 
@@ -211,7 +223,7 @@ Exemple observé : dans un tableau comparatif extrait d'un PDF, le modèle a att
 ### 6.3 Interroger la base
 
 - **Ponctuellement** : dans une conversation, taper `#` puis choisir la base.
-- **En permanence** : créer un assistant (par exemple « Expert MBSE ») dans *Workspace → Models*, avec la base rattachée, un prompt système dédié et *Function Calling* en **Legacy**. Voir [Créer un assistant dans le Workspace](assistant-workspace-open-webui.md).
+- **En permanence** : créer un assistant (par exemple « Expert MBSE ») dans *Workspace → Models*, avec la base rattachée, un prompt système dédié et *Function Calling* en **Legacy**. Voir [Créer un assistant dans le Workspace](02-assistant-workspace-open-webui.md).
 
 ### 6.4 Contrôler l'indexation
 
