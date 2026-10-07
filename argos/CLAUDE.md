@@ -33,6 +33,15 @@ Configuration locale : copier `.env.example` en `.env` (chargé par `src/api/env
 (chemin de la base, défaut `data/argos.db`). Tous les chemins sont absolus (`src/api/paths.js`) ;
 `HOST` (défaut `127.0.0.1`) règle l'adresse d'écoute.
 
+## Devcontainer et Codespaces
+
+`.devcontainer/` reproduit l'environnement (Node 22, Claude Code préinstallé, `npm ci` à la
+création). Le compte Claude persiste dans un volume nommé monté sur `/home/node/.claude`
+(`CLAUDE_CONFIG_DIR`). Le sandbox Bash ne démarre pas dans le conteneur (pas de namespaces
+utilisateur) : l'isolation vient du conteneur, et l'allowlist réseau de `.claude/settings.json`
+est reportée sur le pare-feu `.devcontainer/init-firewall.sh`, lancé avant `npm ci` et à chaque
+démarrage. Ajouter un hôte au réseau autorisé = l'ajouter aux deux endroits.
+
 ## Architecture
 
 - **`src/api/app.js`** — `createApp({ db, notifier, staticDir })` assemble l'application sans effet
