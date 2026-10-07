@@ -4,7 +4,7 @@ Ce tutoriel branche Claude Code (CLI et extension VS Code) sur l'Ollama de la st
 
 - **Configuration de référence** : les durées citées ont été mesurées sur celle du [tutoriel 01](01-configuration-open-webui.md) (Ryzen 7 7840HS, iGPU Radeon 780M, Ollama sous Vulkan, ~15,8 Go adressables). Le tutoriel fonctionne sur toute machine capable de faire tourner la stack ; seules les durées changent (voir le [tutoriel 01, section 2](01-configuration-open-webui.md#2-premier-démarrage)).
 - **Modèle retenu** : `ornith-code`, une variante à contexte de 64k du modèle `ornith:9b` (5,6 Go)
-- **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291. Le **CLI** a été testé, y compris dans le dev container. Le **panneau de l'extension VS Code** `anthropic.claude-code` a été testé dans le dev container du [tutoriel 05](05-claude-code-sandbox-devcontainer.md) : il s'installe et répond, sans écran de connexion. Sur l'hôte, ses réglages suivent la documentation de l'extension et son schéma (lu sur la version 2.1.289 de l'extension, le CLI étant en 2.1.291).
+- **Versions testées** : Ollama 0.35.1, Claude Code (CLI) 2.1.291, puis 2.1.292 pour le rejeu complet du tutoriel (CLI sur l'hôte, configuration de Claude Code vierge). Le **CLI** a été testé, y compris dans le dev container. Le **panneau de l'extension VS Code** `anthropic.claude-code` a été testé dans le dev container du [tutoriel 05](05-claude-code-sandbox-devcontainer.md) : il s'installe et répond, sans écran de connexion. Sur l'hôte, ses réglages suivent la documentation de l'extension et son schéma (lu sur la version 2.1.289 de l'extension, le CLI étant en 2.1.291).
 - **Suite** : pour isoler l'agent du reste de la machine, voir [Isoler l'agent de code : sandbox et dev container](05-claude-code-sandbox-devcontainer.md)
 
 > **Périmètre** : ce tutoriel couvre l'usage local. Un petit modèle de 9B n'a ni la qualité ni la vitesse d'un modèle hébergé par Anthropic : c'est un agent de code **utilisable sur des tâches ciblées**, pas un remplaçant. Les limites sont détaillées à la section 6.
@@ -61,6 +61,7 @@ Tâche d'essai : corriger une fonction `slugify` pour que `node --test` passe (2
 | `ornith-code` (`ornith:9b`, 64k) | CLI sur l'hôte | 3/3 tests, 12 tours | 6 min 51 s |
 | `ornith-code` | Dev container, accès direct à Ollama | 3/3 tests | 78 s |
 | `ornith-code` | Dev container, via la passerelle `ollama-gateway` | 3/3 tests | 114 s |
+| `ornith-code` | CLI sur l'hôte, rejeu du tutoriel (CLI 2.1.292), trois essais | 3/3 en 8 min (13 tours) ; 3/3 en 6 min 20 s (8 tours) avec `claude -p` sans autorisation, l'agent n'ayant pas pu lancer `node --test` (voir 4.2) ; un essai **en boucle** : la même réécriture de `slug.js` répétée une trentaine de fois, compaction comprise, arrêté au bout de 25 min avec 0 test sur 3 | 6 à 25 min |
 | `granite4.2-code` (`granite4.2:8b`, 64k) | Dev container et CLI | Code finalement correct, mais l'agent **ne s'arrête jamais** : timeout de 25 min, sur deux essais | 25 min (timeout) |
 
 Toutes ces mesures utilisent `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` (section 3.2) et ont été faites sur la configuration de référence.
@@ -68,7 +69,8 @@ Toutes ces mesures utilisent `CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536` (section 3.2
 Deux enseignements :
 
 - **`ornith-code` est le modèle recommandé.** `ornith:9b` (https://ollama.com/library/ornith) est décrit comme « A self-improving family of open-source models for agentic coding », avec un contexte natif de 256K.
-- **Les durées varient beaucoup d'un essai à l'autre** : de 78 s à près de 7 min pour la même tâche. Ne pas se fier à une seule mesure.
+- **Les durées varient beaucoup d'un essai à l'autre** : de 78 s à 8 min pour la même tâche. Ne pas se fier à une seule mesure.
+- **Un essai peut boucler** : le modèle répète la même modification avec la même explication, sans progresser. Au bout de quelques minutes sans avancée, interrompre l'agent (Échap, ou Ctrl+C en mode `-p`), restaurer le fichier (`git checkout -- slug.js`) et relancer une session neuve.
 
 `granite4.2:8b` reste le modèle de chat d'Open WebUI et de n8n. Dans une boucle d'agent de code, il aboutit à un code correct mais ne conclut pas : l'agent ne rend jamais la main.
 
@@ -241,7 +243,14 @@ CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
 claude
 ```
 
-Les variables ne valent que pour ce processus. Le même prompt en non interactif : `claude -p "Les tests de slug.test.js échouent. …"`.
+Les variables ne valent que pour ce processus. Le même prompt en non interactif :
+
+```bash
+claude -p "Les tests de slug.test.js échouent. Corrige slugify dans slug.js pour que node --test passe, sans modifier les tests. Vérifie en lançant node --test." \
+  --allowedTools "Bash(node --test*)"
+```
+
+En mode `-p`, personne ne peut répondre aux demandes d'autorisation : une commande qui en exige une est refusée. Sans `--allowedTools`, l'agent du rejeu a bien corrigé `slug.js`, mais ses deux tentatives de lancer `node --test` ont été refusées, et il a conclu sans avoir vérifié son travail. La modification des fichiers du dossier, elle, n'a pas été bloquée.
 
 ### 4.3 Avec `ollama launch claude`
 
@@ -282,7 +291,7 @@ Pour un agent qui exécute des commandes de façon autonome, l'isoler vaut mieux
 ### 6.1 Limites
 
 - **Qualité** : un modèle de 9B échoue sur des refactorings larges ou des bases de code qu'il ne connaît pas. Il réussit sur des corrections ciblées avec un test qui valide.
-- **Durée imprévisible** : pour la même tâche, de 78 s à près de 7 min selon l'essai.
+- **Durée imprévisible** : pour la même tâche, de 78 s à 8 min selon l'essai, et un essai sur trois du rejeu a bouclé sans aboutir (2.2).
 - **Fonctions liées à Anthropic** : sur un fournisseur tiers, l'extension ne propose pas les fonctions qui exigent un compte claude.ai (jauges d'usage du forfait, dictée vocale, onglet Web des sessions cloud).
 - **Recherche d'outils MCP** : désactivée par défaut quand `ANTHROPIC_BASE_URL` pointe un hôte autre qu'Anthropic ; `ENABLE_TOOL_SEARCH=true` la réactive si le point d'accès transmet les blocs `tool_reference`. Non testé avec Ollama.
 - **Remote Control** : indisponible (hôte non Anthropic, et flags coupés par `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`).
@@ -302,6 +311,8 @@ Pour un agent qui exécute des commandes de façon autonome, l'isoler vaut mieux
 | `connection refused` sur `localhost:11434` | Stack arrêtée | `docker compose up -d`, puis `curl -s http://localhost:11434/api/version`. |
 | Le CLI utilise encore l'API d'Anthropic | Le fichier `.claude/settings.local.json` n'est pas dans le dossier de lancement, ou le dossier n'est pas approuvé | Lancer `claude` à la racine du projet ; `/status` pour contrôler l'adresse. |
 | Message `[claude-code:unrecognized_model]` | Modèle inconnu du catalogue | Sans gravité si `CLAUDE_CODE_MAX_CONTEXT_TOKENS` est défini (voir 4.4). |
+| L'agent répète la même modification avec la même explication, sans que les tests progressent | Boucle d'un petit modèle, même avec un contexte bien réglé (observé une fois sur trois lors du rejeu) | Interrompre, `git checkout -- <fichier>`, relancer une session neuve, si possible avec une consigne plus précise. |
+| En `claude -p`, « permission denied » sur une commande de vérification | Mode non interactif : aucune demande d'autorisation possible | `--allowedTools "Bash(node --test*)"` (4.2). |
 
 ---
 
@@ -317,7 +328,7 @@ Pour un agent qui exécute des commandes de façon autonome, l'isoler vaut mieux
 | Confidentialité | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
 | Vérification | `/status`, `/model`, `ollama ps` |
 
-**Résultat** sur la configuration de référence : sur la tâche d'essai, `ornith-code` passe 3 tests sur 3, en 12 tours et 6 min 51 s depuis le CLI, et en 78 à 114 s dans le dev container (accès direct, puis via la passerelle).
+**Résultat** sur la configuration de référence : sur la tâche d'essai, `ornith-code` passe 3 tests sur 3 en 6 à 8 min depuis le CLI (un essai sur trois du rejeu a bouclé), et en 78 à 114 s dans le dev container (accès direct, puis via la passerelle).
 
 ### Pour aller plus loin
 
