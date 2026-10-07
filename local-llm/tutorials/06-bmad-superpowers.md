@@ -76,7 +76,7 @@ Ce tutoriel ne dépend pas de la stack `local-llm` : il utilise Claude avec un c
 
 | Élément | Installation et vérification |
 |---|---|
-| Claude Code, connecté à un compte Anthropic (abonnement ou clé d'API) | `claude --version`. L'exercice consomme des tokens : environ 5 $ en API pour les deux phases mesurées (section 6). |
+| Claude Code, connecté à un compte Anthropic (abonnement ou clé d'API) | `claude --version`. L'exercice consomme des tokens : 5 à 6,5 $ en API pour l'installation et les deux phases mesurées (section 6). |
 | superpowers | Dans Claude Code : `/plugin install superpowers@claude-plugins-official`, puis redémarrer la session. `/plugin` doit le lister. |
 | Node.js + npm (pour `npx skills`) | `node -v` |
 | `uv` (scripts Python de BMAD) | `curl -LsSf https://astral.sh/uv/install.sh \| sh`, puis `uv --version`. **Obligatoire** : sans `uv`, `bmad setup` s'arrête. |
@@ -125,7 +125,7 @@ Le skill `bmad` exécute son script de setup avec `uv`. Ce script crée :
 - `_bmad/scripts/` et `_bmad/method/scripts/tickets.py` ;
 - `_bmad/custom/`, dont le `.gitignore` exclut `*.user.toml`.
 
-Il crée aussi `skills-lock.json` à la racine. Committez ce fichier : il fige les sources et les empreintes des skills installés.
+Le fichier `skills-lock.json`, à la racine, vient lui de la commande `npx skills add`. Committez-le : il fige les sources et les empreintes des skills installés.
 
 Sur l'installation testée, `bmad status` répond `current: true` et ne signale aucun problème. Les skills qu'on n'a pas installés apparaissent comme `absent_skills`, ce que la doc du skill décrit comme « optionnel, pas une faute ».
 
@@ -311,12 +311,15 @@ BMAD se rentabilise quand le travail dépasse une session : la spec et `tickets.
 
 ## 6. Mesures
 
-Les deux phases ont été mesurées sur le projet de l'exercice, avec Claude Code en mode non interactif (`claude -p`, sortie JSON) : les durées, nombres de tours et coûts viennent du rapport de la session. Comme Claude ne pouvait pas poser de questions, le prompt imposait des choix par défaut, que l'agent a notés comme hypothèses dans la spec.
+Les deux phases ont été mesurées deux fois (mesure initiale, puis rejeu complet du tutoriel le 7 octobre 2026) sur le projet de l'exercice, avec Claude Code en mode non interactif (`claude -p`, sortie JSON) : les durées, nombres de tours et coûts viennent du rapport de la session. Comme Claude ne pouvait pas poser de questions, le prompt imposait des choix par défaut, que l'agent a notés comme hypothèses dans la spec.
 
 | Phase | Durée | Tours | Coût API | Résultat |
 |---|---|---|---|---|
 | Planification : `bmad-spec` puis `bmad-ticket` | 5 min 40 s | 17 | 1,47 $ | spec de 4 ko, 5 stories ; découpage relu par un agent indépendant (6 suggestions, toutes appliquées) |
 | Story 1.1 : superpowers, du plan au merge | 9 min 13 s | 59 | 3,32 $ | 3 commits et un merge, 23 tests sur 23, ticket en `built` |
+| Rejeu, `bmad setup` | 20 s | 7 | 0,37 $ | `_bmad/` créé, version 6.13.0-next |
+| Rejeu, planification | 4 min 54 s | 31 | 2,12 $ | spec et 2 fichiers annexes, 6 stories (dont un *refactor sweep*), initiative nommée `initiative-reservation-salles` |
+| Rejeu, story 1.1 | 12 min 33 s | 50 | 3,81 $ | 4 commits et un merge, 33 tests sur 33, ticket en `built` ; après `done`, les stories 1.2 et 1.3 deviennent disponibles |
 
 Les sous-agents de `subagent-driven-development` ont choisi leur modèle selon le rôle : Haiku pour implémenter, Sonnet pour relire chaque tâche, Opus pour la revue finale. Il y a eu 5 sous-agents au total : 2 pour implémenter, 2 pour relire chaque tâche, 1 pour la revue finale. Cela explique qu'une story ne coûte qu'environ deux fois une planification.
 

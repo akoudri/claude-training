@@ -136,7 +136,7 @@ Dans une session, lancer `/sandbox`. Le panneau a trois onglets :
 
 Le choix est écrit dans `.claude/settings.local.json` du projet. Pour sandboxer tous les projets, mettre `sandbox.enabled` dans `~/.claude/settings.json`.
 
-**Pour essayer** sur le projet d'essai du tutoriel 04 (`~/essai-claude-local`, qui contient déjà le `.claude/settings.local.json` pointant vers Ollama) : lancer `claude`, taper `/sandbox` et choisir *Auto-allow*. Demander ensuite à l'agent de lancer les commandes Bash `curl -sI https://example.com`, puis `echo test > ~/sandbox-test.txt`. Le `curl` est bloqué ou fait l'objet d'une demande d'autorisation (à refuser), et l'écriture hors du projet échoue en « système de fichiers en lecture seule », comme dans les mesures de 2.6. Passer par une commande Bash est important : l'outil Write, lui, n'est pas sandboxé (2.1).
+**Pour essayer** sur le projet d'essai du tutoriel 04 (`~/essai-claude-local`, qui contient déjà le `.claude/settings.local.json` pointant vers Ollama) : lancer `claude`, taper `/sandbox` et choisir *Auto-allow*. Demander ensuite à l'agent de lancer les commandes Bash `curl -sI https://example.com`, puis `echo test > ~/sandbox-test.txt`. Le `curl` est bloqué ou fait l'objet d'une demande d'autorisation (à refuser), et l'écriture hors du projet échoue en « système de fichiers en lecture seule », comme dans les mesures de 2.6. En mode `claude -p`, sans demande possible, le rejeu a obtenu pour le `curl` une réponse `HTTP/1.1 403 Forbidden` du proxy, avec l'en-tête `X-Proxy-Error: blocked-by-allowlist`. Passer par une commande Bash est important : l'outil Write, lui, n'est pas sandboxé (2.1).
 
 Pour changer le sandbox le temps d'une session, sans écrire de fichier : `claude --settings '{"sandbox": {"enabled": true, "allowUnsandboxedCommands": false}}'`.
 
@@ -193,7 +193,7 @@ Les deux vont ensemble : le mode strict sans `failIfUnavailable` laisse l'agent 
 
 Remarques à connaître :
 
-- **`denyRead: ["~/"]` peut gêner les outils installés dans le dossier personnel** (gestionnaire de versions de Node, cache npm…). Ce bloc est celui de l'exemple de la documentation ; si une commande échoue en lecture, ajouter le chemin concerné à `allowRead` plutôt que de retirer la règle.
+- **`denyRead: ["~/"]` peut gêner les outils installés dans le dossier personnel** (gestionnaire de versions de Node, cache npm…). Ce bloc est celui de l'exemple de la documentation ; si une commande échoue en lecture, ajouter le chemin concerné à `allowRead` plutôt que de retirer la règle. Mesuré sur la configuration de référence : pour les commandes sandboxées, `~/.config` et `~/.bashrc` paraissent inexistants et le projet reste lisible, comme prévu ; mais le Node 22 installé par nvm (`~/.nvm`) devient invisible, et `node --version` répond `v20.14.0`, le Node du système, **sans aucune erreur**. Un binaire de `~/.local/bin` devient, lui, « commande introuvable » (ici, un hook qui réécrivait les commandes du shell vers un tel binaire les faisait toutes échouer). Pour nvm : `"allowRead": [".", "~/.nvm"]`.
 - **Réglages de dépôt et réglages utilisateur** : la documentation indique qu'un `false` placé dans les réglages utilisateur, `--settings` ou les réglages gérés **l'emporte** sur un `true` du projet. Pour un sandbox qu'un dépôt ne peut pas assouplir, mettre `allowUnsandboxedCommands: false` dans `~/.claude/settings.json` ou passer par `--settings`.
 - **`sandbox.network.strictAllowlist`**, qui refuse tout hôte hors liste au lieu de demander, ne s'accepte que dans les réglages utilisateur ou gérés, ou via `--settings` : un dépôt ne peut pas l'activer.
 - **Le modèle n'a pas besoin d'être dans la liste réseau.** Les requêtes vers Ollama sont émises par le processus Claude Code, pas par une commande Bash. La documentation du sandbox dit que celui-ci couvre **les commandes shell**, que le proxy tourne hors du sandbox et que les outils intégrés suivent les permissions ; elle ne dit **pas** explicitement que les appels de l'API du modèle sont hors sandbox. La mesure ci-dessous le vérifie sur la configuration de référence.
@@ -447,15 +447,15 @@ Mesures faites depuis l'intérieur du conteneur, dans l'état de l'exemple :
 | Passerelle `POST /v1/messages` avec le modèle `glm-5.3:cloud` | Refusé localement : `ollama cloud is disabled: remote model is unavailable` |
 | `touch /workspace/.devcontainer/x` | `Read-only file system` |
 | Utilisateur | `node`, `sudo` absent, `claude 2.1.291` |
-| Exercice `slugify` avec `--dangerously-skip-permissions` | 3/3 tests, **114 s** |
+| Exercice `slugify` avec `--dangerously-skip-permissions` | 3/3 tests, **114 s** ; rejeu du tutoriel : 3/3 en **222 s** (12 tours) |
 
-Le journal d'accès de la passerelle pendant l'exercice ne montre que `POST /v1/messages?beta=true` : 5 appels, tous en 200.
+Le journal d'accès de la passerelle pendant l'exercice ne montre que `POST /v1/messages?beta=true` : 5 appels, tous en 200 (10 lors du rejeu). Toutes les autres vérifications de ce tableau ont été reproduites à l'identique lors du rejeu, sur une stack neuve.
 
 > **Piège rencontré** : la passerelle filtre les **routes**, pas le **modèle** demandé. Avant l'ajout de `OLLAMA_NO_CLOUD=1` au service `ollama` (`docker-compose.yml`), une requête `/v1/messages` vers un modèle `:cloud` (par exemple `glm-5.3:cloud`) était transmise par Ollama à ollama.com : le prompt quittait la machine, même si la réponse était `Unauthorized` faute de compte. Avec `OLLAMA_NO_CLOUD=1`, Ollama refuse ces modèles sans aucun appel réseau (réponse en moins d'une milliseconde). Le réglage protège aussi n8n et Open WebUI. Documentation : https://docs.ollama.com/faq (« How do I disable Ollama Cloud features? »).
 
 La passerelle résout le nom `ollama` à chaque requête (`resolver 127.0.0.11` dans `nginx.conf`) : si le conteneur Ollama est recréé et change d'adresse, elle suit sans redémarrage.
 
-Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 78 s. Les durées varient beaucoup d'un essai à l'autre : de 78 à 114 s dans le conteneur, 6 min 51 s pour le CLI sur l'hôte (voir le tutoriel 04), sur la configuration de référence. Le temps d'un seul essai n'est pas représentatif.
+Une mesure antérieure, avec accès direct à Ollama (sans passerelle), donnait 78 s. Les durées varient beaucoup d'un essai à l'autre : de 78 à 222 s dans le conteneur, 6 à 8 min pour le CLI sur l'hôte, avec un essai qui a bouclé (voir le tutoriel 04), sur la configuration de référence. Le temps d'un seul essai n'est pas représentatif.
 
 ## 7. Dépannage
 
