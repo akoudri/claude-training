@@ -7,8 +7,9 @@ Tout le contenu est rédigé en français.
 
 - `Formation Claude.pdf` : support de cours.
 - `labs/` : énoncés des labs M1 à M6 et `README.md` pour les apprenants.
-- `argos/` : application fil rouge (Node 22.13+, Express, `node:sqlite`, React/Vite, Vitest), dans son état de départ.
-  Les apprenants la clonent séparément. Elle n'a volontairement pas de `CLAUDE.md` : le lab M2 le fait créer.
+- `argos/` : application fil rouge (Node 22.13+, Express, `node:sqlite`, React/Vite, Vitest), dans une version avancée
+  (avec son propre `argos/CLAUDE.md`, qui fait foi pour le code d'Argos). Ce n'est pas l'état de départ des labs :
+  les apprenants clonent un dépôt Argos séparé, sans `CLAUDE.md`, que le lab M2 leur fait créer.
 - `argos-marketplace/` : marketplace de démonstration (plugin `argos-toolkit@janus-argos`), extension du lab M2.
 - `mcp/` : démos de serveurs MCP en Python (uv). `server.py` (bloc-notes NotesRapides), `blender_mcp_server.py` + `blender_server.py` (pont Claude Code → Blender, TCP 9876).
 - `local-llm/` : stack LLM locale (Ollama sur iGPU, Open WebUI, n8n, pgvector, passerelle nginx) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
@@ -16,7 +17,7 @@ Tout le contenu est rédigé en français.
 
 ## Commandes
 
-- Argos : `cd argos && npm install && npm test`
+- Argos : `cd argos && npm install && npm test` (budgets de performance : `npm run perf`)
 - Agent n8n : `cd local-llm && node --test 'n8n/test/*.test.*'` ; build des workflows : `node n8n/scripts/build.mjs` ; déploiement : `n8n/scripts/deploy.sh`
 - MCP : `cd mcp && uv sync`
 
