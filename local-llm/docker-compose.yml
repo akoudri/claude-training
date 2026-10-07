@@ -1,7 +1,12 @@
-# Stack LLM local agentique + RAG
-# Cible : Ryzen 7 7840HS + iGPU Radeon 780M (gfx1103), 30 Go RAM, pas de GPU NVIDIA.
+# Stack LLM locale agentique + RAG
+# Fonctionne sur toute machine avec Docker (Linux, macOS, Windows/WSL2). Par défaut, Ollama tourne
+# sur le CPU ; un profil GPU s'ajoute par COMPOSE_FILE dans .env (voir .env.example) :
+#   docker-compose.vulkan.yml : GPU AMD ou Intel, intégré ou dédié (Linux, via Vulkan)
+#   docker-compose.nvidia.yml : GPU NVIDIA (Linux ou WSL2, NVIDIA Container Toolkit requis)
+# Configuration de référence des mesures citées dans les tutoriels :
+#   Ryzen 7 7840HS + iGPU Radeon 780M (profil vulkan, mémoire partagée GTT ~16 Go), 30 Go de RAM.
 #
-#   ollama      : inférence (iGPU via Vulkan, mémoire partagée GTT ~16 Go)
+#   ollama      : inférence
 #   ollama-init : télécharge le modèle de chat et le modèle d'embedding au démarrage
 #   postgres    : base n8n + base "rag" avec pgvector (vector store partagé)
 #   open-webui  : chat + RAG documentaire (vecteurs dans pgvector)
@@ -18,23 +23,14 @@ services:
   ollama:
     <<: *restart
     image: ollama/ollama:latest
-    # Vulkan est inclus dans l'image standard et activé dès que /dev/dri est visible.
-    # (L'image :rocm ne supporte pas officiellement gfx1103 et la VRAM dédiée n'est que de 512 Mo ;
-    #  Vulkan exploite la mémoire GTT partagée, bien plus adaptée à un iGPU.)
-    devices:
-      - /dev/kfd
-      - /dev/dri
-    group_add:
-      - "${RENDER_GID:-992}" # groupe "render" de l'hôte (getent group render)
-      - "${VIDEO_GID:-44}"   # groupe "video" de l'hôte
+    # Accès au GPU : voir docker-compose.vulkan.yml et docker-compose.nvidia.yml.
     environment:
-      - OLLAMA_IGPU_ENABLE=1           # sinon Ollama ignore la 780M ("dropping integrated GPU")
       - OLLAMA_KEEP_ALIVE=30m         # évite de recharger le modèle entre deux appels d'agent
       - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-16384} # agents + RAG : contexte long nécessaire
       - OLLAMA_FLASH_ATTENTION=1
       - OLLAMA_KV_CACHE_TYPE=q8_0      # divise ~par 2 la mémoire du cache KV
       - OLLAMA_MAX_LOADED_MODELS=2     # modèle de chat + modèle d'embedding simultanément
-      - OLLAMA_NUM_PARALLEL=1          # iGPU : une requête à la fois, sinon le contexte est multiplié
+      - OLLAMA_NUM_PARALLEL=1          # une requête à la fois, sinon la mémoire du contexte est multipliée
       - OLLAMA_NO_CLOUD=1              # pas de modèles ":cloud" : sinon une requête vers un tel modèle part sur ollama.com
     volumes: [ollama:/root/.ollama]
     ports: ["127.0.0.1:11434:11434"]
@@ -65,8 +61,8 @@ services:
     volumes:
       - pg:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
-    # 5432 est déjà pris sur l'hôte : exposé sur 5433, en local uniquement
-    ports: ["127.0.0.1:5433:5432"]
+    # Exposé en local uniquement, sur 5433 pour ne pas gêner un Postgres déjà installé sur l'hôte
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d n8n"]
       interval: 5s
@@ -138,6 +134,8 @@ networks:
   default: {}
   # Réseau des dev containers d'agents de code : "internal" = aucune route vers Internet
   # et aucune résolution DNS de noms externes. Seule la passerelle y est joignable.
+  # Nom fixe (sinon préfixé par le nom du dossier) : le dev container le rejoint par ce nom.
   agents:
+    name: llm-agents
     internal: true
 

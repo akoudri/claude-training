@@ -1,0 +1,13 @@
+# Profil GPU NVIDIA, sous Linux ou Windows (Docker Desktop + WSL2).
+# Prérequis : pilote NVIDIA et NVIDIA Container Toolkit (inclus dans Docker Desktop).
+# Activation : COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml dans .env
+#              (sous Windows hors WSL, le séparateur est ";")
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

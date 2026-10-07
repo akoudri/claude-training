@@ -1,0 +1,15 @@
+# Profil GPU AMD ou Intel (intégré ou dédié), sous Linux, via Vulkan.
+# Activation : COMPOSE_FILE=docker-compose.yml:docker-compose.vulkan.yml dans .env
+#
+# Vulkan est inclus dans l'image standard d'Ollama et activé dès que /dev/dri est visible.
+# Sur un iGPU, il exploite la mémoire partagée (GTT) ; l'image :rocm, elle, ne supporte pas
+# tous les GPU AMD (par exemple la Radeon 780M, gfx1103) et ne verrait que la VRAM dédiée.
+services:
+  ollama:
+    devices:
+      - /dev/dri
+    group_add:
+      - "${RENDER_GID:-992}" # groupe "render" de l'hôte : getent group render
+      - "${VIDEO_GID:-44}"   # groupe "video" de l'hôte : getent group video
+    environment:
+      - OLLAMA_IGPU_ENABLE=1 # sinon Ollama ignore un GPU intégré ("dropping integrated GPU")

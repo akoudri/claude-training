@@ -1,5 +1,5 @@
 {
-  // Dev container pour Claude Code branché sur l'Ollama local de la stack mcp-simple.
+  // Dev container pour Claude Code branché sur l'Ollama local de la stack local-llm.
   // Inspiré du conteneur de référence d'Anthropic (anthropics/claude-code/.devcontainer),
   // mais isolé par le réseau plutôt que par un pare-feu dans le conteneur.
   "name": "Claude Code local (Ollama)",
@@ -10,7 +10,8 @@
   "runArgs": [
     // Réseau "internal" de la stack : aucune route vers Internet, aucun DNS externe.
     // Seule la passerelle ollama-gateway y est joignable. La stack doit tourner avant l'ouverture.
-    "--network=mcp-simple_agents"
+    // Nom fixé par "name:" dans docker-compose.yml, quel que soit le dossier du dépôt.
+    "--network=llm-agents"
   ],
   "customizations": {
     "vscode": {
