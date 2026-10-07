@@ -13,8 +13,9 @@ npm install
 npm run dev        # API sur http://localhost:3000 + interface sur http://localhost:5173
 ```
 
-Au premier démarrage, l'API applique les migrations puis importe l'historique de l'ancien outil
-de support (`data/historique.json`) dans `data/argos.db`.
+Au premier démarrage, l'API applique les migrations puis importe une seule fois l'historique de
+l'ancien outil de support (`data/historique.json`) dans `data/argos.db`. Par défaut elle n'écoute que
+sur `127.0.0.1` (variable `HOST`), car elle n'a pas d'authentification.
 
 ## Scripts
 
@@ -23,6 +24,8 @@ de support (`data/historique.json`) dans `data/argos.db`.
 | `npm run dev`         | API (rechargement automatique) et interface en parallèle             |
 | `npm start`           | API seule, qui sert aussi l'interface construite (`npm run build`)   |
 | `npm test`            | Suite de tests complète (API et interface)                           |
+| `npm run test:perf`   | Budgets de performance sur 10 000 tickets (hors `npm test`)          |
+| `npm run bench`       | Benchmarks sans seuil (opérations par seconde)                       |
 | `npm run lint`        | Analyse statique ESLint                                              |
 | `npm run build`       | Construction de l'interface dans `dist/`                             |
 | `npm run db:migrate`  | Applique les migrations en attente                                   |
@@ -44,7 +47,7 @@ src/web/            interface React
 migrations/         migrations SQL, appliquées dans l'ordre alphabétique
 data/               historique à importer et base SQLite locale (non versionnée)
 scripts/            scripts de développement
-tests/              tests Vitest (tests/api, tests/web) et jeux de données (tests/fixtures)
+tests/              tests Vitest (tests/api, tests/web, tests/perf) et jeux de données (tests/fixtures)
 ```
 
 ## API
@@ -63,8 +66,9 @@ Statuts : `open`, `in_progress`, `closed`. Priorités : `low`, `normal`, `high`.
 ## Notifications
 
 Chaque création de ticket et chaque changement de statut est envoyé au service de notification
-Argos. Pour travailler sans le vrai service, lancer `npm run notif:mock` et renseigner
-`NOTIF_API_URL=http://localhost:4010` dans `.env` (voir `.env.example`). Une notification qui
+Argos. L'URL du service et sa clé d'API sont lues dans `NOTIF_API_URL` et `NOTIF_API_KEY` ; si l'une des
+deux manque, les notifications sont désactivées. Pour travailler sans le vrai service, lancer
+`npm run notif:mock` et reprendre les valeurs de `.env.example` dans `.env`. Une notification qui
 échoue est journalisée mais ne bloque jamais l'action de l'utilisateur.
 
 ## Migrations

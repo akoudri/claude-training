@@ -12,14 +12,20 @@ export default function TicketList({ tickets, selectedId, onSelect }) {
             ticket.status === 'closed' ? 'closed' : '',
             ticket.id === selectedId ? 'selected' : '',
           ].join(' ')}
-          onClick={() => onSelect(ticket.id)}
         >
-          <span className="id">#{ticket.id}</span>
-          <span className="title">{ticket.title}</span>
-          <span className={`badge priority-${ticket.priority}`}>
-            {PRIORITY_LABELS[ticket.priority] ?? ticket.priority}
-          </span>
-          <span className="status">{STATUS_LABELS[ticket.status] ?? ticket.status}</span>
+          <button
+            type="button"
+            className="ticket"
+            aria-current={ticket.id === selectedId ? 'true' : undefined}
+            onClick={() => onSelect(ticket.id)}
+          >
+            <span className="id">#{ticket.id}</span>
+            <span className="title">{ticket.title}</span>
+            <span className={`badge priority-${ticket.priority}`}>
+              {PRIORITY_LABELS[ticket.priority] ?? ticket.priority}
+            </span>
+            <span className="status">{STATUS_LABELS[ticket.status] ?? ticket.status}</span>
+          </button>
         </li>
       ))}
     </ul>

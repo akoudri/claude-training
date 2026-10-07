@@ -12,4 +12,10 @@ describe('GET /api/stats', () => {
     const res = await request(app).get('/api/stats');
     expect(res.body).toEqual({ total: 2, open: 1, in_progress: 1, closed: 0 });
   });
+
+  it("compte les tickets importés de l'ancien outil", async () => {
+    const { app } = setup();
+    const res = await request(app).get('/api/stats');
+    expect(res.body).toEqual({ total: 4, open: 1, in_progress: 1, closed: 2 });
+  });
 });

@@ -18,9 +18,17 @@ createServer((req, res) => {
   let body = '';
   req.on('data', (chunk) => (body += chunk));
   req.on('end', () => {
-    const { event, payload } = JSON.parse(body || '{}');
+    let message;
+    try {
+      message = JSON.parse(body || '{}');
+    } catch {
+      console.log('✗ requête refusée : corps JSON invalide');
+      res.writeHead(400, { 'content-type': 'application/json' }).end('{"error":"invalid json"}');
+      return;
+    }
+    const { event, payload } = message;
     const key = auth.slice('Bearer '.length);
     console.log(`✓ ${event} ${JSON.stringify(payload)} (clé ${key.slice(0, 9)}…)`);
     res.writeHead(202, { 'content-type': 'application/json' }).end('{"accepted":true}');
   });
-}).listen(PORT, () => console.log(`Service de notification simulé sur http://localhost:${PORT}`));
+}).listen(PORT, '127.0.0.1', () => console.log(`Service de notification simulé sur http://127.0.0.1:${PORT}`));
