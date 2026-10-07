@@ -13,7 +13,8 @@ const LIGNES = [
   { id: 'EX-03', type: 'exigence', intitule: 'Support', statut: 'non_couverte', justification: 'Absent', citations: [] },
 ];
 const STATS = computeStats(LIGNES);
-const DATE = new Date(2026, 9, 5, 14, 7);
+// Instant fixé en UTC : le runner de code de n8n tourne en UTC, les libellés doivent être à l'heure de Paris.
+const DATE = new Date('2026-10-05T12:07:00Z');
 
 test('computeStats compte par statut', () => {
   assert.deepEqual(STATS, { total: 3, couverte: 1, partielle: 1, non_couverte: 1, indeterminee: 0 });

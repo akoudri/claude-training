@@ -27,12 +27,25 @@ function pad(n) {
   return String(n).padStart(2, '0');
 }
 
+// Fuseau des dates affichées (= GENERIC_TIMEZONE de docker-compose.yml). Le runner de code de n8n
+// ne reçoit pas TZ : getHours() y donnerait l'heure UTC.
+const TIME_ZONE = 'Europe/Paris';
+const DATE_PARTS = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+
+function dateParts(date) {
+  return Object.fromEntries(DATE_PARTS.formatToParts(date).map(({ type, value }) => [type, value]));
+}
+
 function formatDateLabel(date) {
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const p = dateParts(date);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }
 
 function reportFileName(date) {
-  return `conformite-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.md`;
+  const p = dateParts(date);
+  return `conformite-${p.year}-${p.month}-${p.day}-${p.hour}${p.minute}.md`;
 }
 
 function formatDuration(ms) {
