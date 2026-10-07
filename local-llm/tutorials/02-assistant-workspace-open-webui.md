@@ -126,7 +126,7 @@ Après **Save**, ouvrez les **Valves** de l'outil (icône engrenage dans la list
 
 Pour des outils qui existent déjà sous forme de service, il n'y a pas de code à écrire dans Open WebUI : on déclare le serveur.
 
-**Admin Panel → Settings → Integrations** (section *Tool Servers*) → ajouter une connexion de type **OpenAPI** ou **MCP**, avec son URL.
+**Admin Panel → Settings → Integrations**, section *External Tool Servers*, bouton **+** → *Add Connection*. Un clic sur le champ *Type* bascule entre **OpenAPI** et **MCP Streamable HTTP** ; renseigner ensuite le nom et l'URL.
 
 - Le serveur doit être **joignable en HTTP depuis le conteneur Open WebUI**. Un serveur MCP en mode `stdio`, comme les exemples de ce dépôt, doit d'abord être exposé en HTTP, par exemple avec le proxy `mcpo` ou un transport *Streamable HTTP*.
 - Une fois déclarés, les outils du serveur se sélectionnent dans un assistant comme les outils Python.
@@ -141,8 +141,8 @@ Pour des outils qui existent déjà sous forme de service, il n'y a pas de code 
 
 | Champ | Valeur (exemple) | Ce que ça implique |
 |---|---|---|
-| **Name** | `Expert MBSE` | Le nom affiché dans le sélecteur de modèle. |
-| **Base Model** | `granite4.2:8b` | Le modèle qui génère les réponses. |
+| **Model Name** (en haut, à côté de l'icône) | `Expert MBSE` | Le nom affiché dans le sélecteur de modèle. L'identifiant (`expert-mbse`) en est déduit. |
+| **Base Model (From)** | `granite4.2:8b` | Le modèle qui génère les réponses. |
 | **Description** | `Assistant MBSE appuyé sur les documents Acme Défense` | Visible dans le sélecteur, pour aider les utilisateurs à choisir. |
 | **System Prompt** | voir ci-dessous | Les consignes de l'assistant, ajoutées à chaque conversation. |
 
@@ -171,9 +171,9 @@ Le bouton *Function Calling* tourne en boucle à chaque clic : **Default → Nat
 
 ### 5.3 Knowledge, Tools, Capabilities
 
-- **Knowledge** : cliquez sur le lien gris **Select Knowledge**, puis choisissez la base, l'élément marqué *Collection* et pas un fichier isolé. Une étiquette « MBSE Expert » doit apparaître. La phrase *« To attach knowledge base here, add them to the "Knowledge" workspace first »* s'affiche simplement tant que rien n'est sélectionné. N'utilisez pas le lien **Upload** : il rattache un fichier seul, hors de la base.
+- **Knowledge** : cliquez sur le lien gris **Select Knowledge**, puis choisissez la base dans la rubrique *Collections*, et pas un fichier isolé de la rubrique *Files*. Une étiquette « MBSE Expert » doit apparaître. La phrase *« To attach knowledge base here, add them to the "Knowledge" workspace first »* reste affichée même après la sélection : seule l'étiquette compte. N'utilisez pas le lien **Upload** : il rattache un fichier seul, hors de la base.
 - **Tools** : cochez les outils créés à l'étape 2. Ils seront proposés dans les conversations avec cet assistant.
-- **Capabilities** :
+- **Capabilities** : à la création, toutes sont cochées (sauf *Usage*), quels que soient les réglages du modèle de base. Décochez celles marquées ❌ :
 
 | Capability | Assistant documentaire | Raison |
 |---|---|---|
@@ -219,10 +219,18 @@ Ouvrez une **nouvelle conversation** à chaque test, pour que l'historique d'un 
 
 | Test | Avec | Attendu |
 |---|---|---|
-| Question sur les documents, **sans `#`** : « Quel est le rôle de Novaltis dans le Projet Héron ? » | Expert MBSE | Indication « recherche dans la base » pendant le traitement. Réponse citée [n] : Novaltis est le prestataire qui répond au cahier des charges d'Acme Défense. Sources affichées sous la réponse. |
+| Question sur les documents, **sans `#`** : « Quel est le rôle de Novaltis dans le Projet Héron ? » | Expert MBSE | Statut « Searching Knowledge for … » pendant le traitement. Réponse avec citations (pastilles au nom du fichier) : Novaltis est le prestataire qui répond au cahier des charges d'Acme Défense. Sources affichées sous la réponse. |
 | Information absente : « Quel est le coût de licence par poste ? » | Expert MBSE | Le modèle dit que l'information manque. |
 | Question générale : « Différence entre SysML v1 et v2 en 5 points » | `granite4.2:8b` | Réponse tirée de ses connaissances, sans refus. |
 | Demande qui nécessite un outil (seulement si vous avez créé l'outil et son workflow, 4.1) : « Lance le workflow d'analyse MBSE sur l'exigence EX-04 » | Expert MBSE (avec outil) | L'outil est appelé (indiqué dans le statut), et son résultat est utilisé. |
+
+Mesuré sur la configuration de référence avec l'assistant de ce tutoriel :
+
+| Test | Résultat observé |
+|---|---|
+| Rôle de Novaltis | Réponse attendue (le prestataire), mais complétée par des exigences du cahier des charges que la proposition ne couvre pas (support, guide de modélisation) : le modèle mélange les deux documents. Les citations permettent de le voir. |
+| Coût de licence | L'information manque, dit **en anglais** avec la consigne anglaise (voir le [tutoriel 01, §3.3](01-configuration-open-webui.md#33-system-prompt)) ; en français avec une consigne traduite. |
+| Question générale | Réponse en 5 points, sans refus, en ~55 s. |
 
 La série complète de questions de test et le tableau de diagnostic figurent dans le [guide de configuration, §7](01-configuration-open-webui.md#7-tester-le-rag).
 
@@ -297,7 +305,7 @@ Un modèle ne se souvient de rien d'une conversation à l'autre. Open WebUI prop
 
 | Cas | Comment | Sur cette stack |
 |---|---|---|
-| On l'appelle | `#` dans le chat, puis choisir la note : son contenu est ajouté au contexte. | ✅ |
+| On l'appelle | Bouton **+** de la zone de saisie → *Attach Notes*, puis choisir la note : son contenu est ajouté au contexte. Le `#` ne propose que les bases et les fichiers, pas les notes. | ✅ |
 | Le modèle va la chercher | En Function Calling *Native* avec *Builtin Tools* activés, le modèle dispose des outils `search_notes` et `view_note`, et aussi de `write_note` et `replace_note_content` : il peut **modifier** vos notes. | ❌ Builtin Tools désactivés ; peu fiable avec un modèle de 8B |
 
 > Le chat d'une note active les Builtin Tools même s'ils sont décochés sur le modèle : ses réponses sont un peu plus lentes que dans une conversation normale.
@@ -308,13 +316,22 @@ Un modèle ne se souvient de rien d'une conversation à l'autre. Open WebUI prop
 
 À chaque message, Open WebUI cherche les **8 souvenirs les plus proches** des derniers messages de l'utilisateur et les **injecte automatiquement** dans le contexte, dans la limite de **2 000 caractères**. Il faut pour cela que la capability *Memory* du modèle soit cochée.
 
-Réglages globaux, stockés dans la table `config` de `webui.db` :
+Réglages globaux, stockés dans la table `config` de `webui.db` (valeurs par défaut, à conserver) :
 
-| Clé | Valeur | Effet |
-|---|---|---|
-| `memories.enable` | true | La fonction est disponible. |
-| `memories.system_context.enable` | true | Les souvenirs sont injectés dans les conversations. |
-| `memories.background_review.enable` | **false** | Le modèle n'extrait pas de lui-même de nouveaux souvenirs après les échanges. À laisser désactivé ici : cela ajouterait un appel au modèle après chaque réponse, soit 10 à 30 s de GPU occupé. |
+| Clé | Valeur | Effet | Où la modifier |
+|---|---|---|---|
+| `memories.enable` | true | La fonction est disponible. | *Admin Panel → Settings → General*, section *Features* : **Memories** |
+| `memories.system_context.enable` | true | Les souvenirs sont injectés dans les conversations. | Même section : **Memory System Context** |
+| `memories.background_review.enable` | **false** | Le modèle n'extrait pas de lui-même de nouveaux souvenirs après les échanges. À laisser désactivé ici : cela ajouterait un appel au modèle après chaque réponse, soit 10 à 30 s de GPU occupé. | Absent de l'interface. Variable `ENABLE_MEMORY_BACKGROUND_REVIEW` (défaut `False`), lue au premier démarrage seulement, comme toute *PersistentConfig* (tutoriel 01, section 2). |
+
+Pour lire ces valeurs :
+
+```bash
+docker compose exec open-webui python3 -c "
+import sqlite3
+c = sqlite3.connect('/app/backend/data/webui.db')
+print(c.execute(\"select key, value from config where key like 'memories.%'\").fetchall())"
+```
 
 > Sur un **assistant documentaire**, décochez la capability *Memory* : des souvenirs personnels injectés dans le contexte vont contre la consigne « answer only from the provided context ». Gardez-la sur le modèle généraliste.
 
@@ -323,14 +340,14 @@ Réglages globaux, stockés dans la table `config` de `webui.db` :
 | | **Memory** | **Notes** |
 |---|---|---|
 | Nature | Faits courts, une ligne chacun | Documents structurés |
-| Utilisation | **Automatique**, dans chaque conversation | **Explicite**, par `#` |
+| Utilisation | **Automatique**, dans chaque conversation | **Explicite**, par **+ → Attach Notes** |
 | Taille | ~2 000 caractères injectés au maximum | Plusieurs pages |
 | Idéal pour | Qui vous êtes, vos préférences, votre contexte permanent | L'état d'un projet, les décisions prises, une synthèse en cours |
 
 Combinaison conseillée :
 
 - **Memory** : 3 à 5 faits stables sur vous, utilisés par le modèle généraliste.
-- **Une note par projet** comme mémoire de travail (« Synthèse SysML v2 : décisions, points ouverts »). Vous y reportez ce qu'une conversation avec l'assistant a produit d'utile, vous la retravaillez, puis vous la rappelez avec `#` quand vous reprenez le sujet.
+- **Une note par projet** comme mémoire de travail (« Synthèse SysML v2 : décisions, points ouverts »). Vous y reportez ce qu'une conversation avec l'assistant a produit d'utile, vous la retravaillez, puis vous la rappelez avec **+ → Attach Notes** quand vous reprenez le sujet.
 
 | | Notes | Knowledge | Conversation |
 |---|---|---|---|
@@ -346,7 +363,7 @@ Combinaison conseillée :
 |---|---|---|
 | Admin → Models → `granite4.2:8b` | System Prompt | **vide** (modèle généraliste) |
 | | think / max_tokens / temperature / Function Calling | Off / 2048 / 0.3 / Native |
-| Admin → Documents | Top K (nombre d'extraits) | 8 |
+| Admin → Documents | Top K et Top K Reranker (nombre d'extraits) | 8 et 8 |
 | Workspace → Knowledge | documents | DOCX, une version par document |
 | Workspace → Tools | outils Python | facultatif |
 | Admin → Integrations | serveurs OpenAPI / MCP | facultatif |
@@ -360,7 +377,7 @@ Combinaison conseillée :
 | | Builtin Tools, Memory | décochés |
 | Settings → Personalization → Memory | faits sur l'utilisateur | 3 à 5, pour le modèle généraliste |
 | Admin (`config`) | `memories.background_review.enable` | false |
-| Notes | une note par projet | rappelée par `#` |
+| Notes | une note par projet | rappelée par **+ → Attach Notes** |
 
 ### Pièges rencontrés
 
@@ -369,5 +386,5 @@ Combinaison conseillée :
 | Le modèle de base refuse de répondre aux questions générales | Prompt « answer only from the context » posé sur le modèle de base | Déplacer le prompt dans un assistant du Workspace. |
 | L'assistant dit que l'information manque, et les logs ne montrent aucune recherche | Function Calling en Native avec Builtin Tools décoché | Passer l'assistant en **Legacy**. |
 | La base n'apparaît pas dans l'assistant | Sélection non enregistrée | *Select Knowledge*, vérifier l'étiquette, puis **Save & Update**. |
-| « Top K = 8 » sans effet sur le nombre d'extraits | Réglé dans les Advanced Params (échantillonnage) au lieu de *Admin → Documents* | Remettre top_k sur Default dans l'assistant ; régler Top K dans *Documents*. |
+| « Top K = 8 » sans effet sur le nombre d'extraits | Réglé dans les Advanced Params (échantillonnage) au lieu de *Admin → Documents* ; ou *Top K Reranker* laissé à 3 avec la recherche hybride | Remettre top_k sur Default dans l'assistant ; régler Top K **et** Top K Reranker dans *Documents* ([tutoriel 01, section 5](01-configuration-open-webui.md#5-documents-et-rag)). |
 | Extraits en double, réponses incohérentes | Le même document indexé en PDF et en DOCX | Ne garder que le DOCX. |

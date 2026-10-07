@@ -34,7 +34,7 @@ Ordres de grandeur mesurés sur la configuration de référence :
 
 - lecture du prompt (*prompt eval*) : **~250 tokens/s** → 1 400 tokens de contexte RAG ≈ 5 s ;
 - génération : **~14,5 tokens/s** → une réponse de 600 tokens ≈ 40 s ;
-- indexation d'un document de 142 extraits avec `bge-m3` : ~38 s (batch de 1).
+- indexation d'un document de 180 extraits (163 ko de texte) avec `bge-m3` : ~15 s.
 
 > **À retenir** : sur la configuration de référence, chaque token généré coûte ~70 ms. L'essentiel de l'optimisation consiste à **ne pas faire générer de tokens inutiles** au modèle.
 
@@ -79,6 +79,8 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
    Si `ollama-init` s'arrête avec un code différent de 0 (coupure réseau, nom de modèle erroné dans `.env`), corriger la cause puis relancer le téléchargement avec `docker compose up ollama-init`.
 
 5. Ouvrir http://localhost:3000 et créer le compte. **Le premier compte créé devient administrateur.** Si la liste des modèles est vide, le téléchargement n'est pas terminé (étape 4) : recharger la page une fois qu'il est fini.
+
+   > **Langue de l'interface** : Open WebUI s'affiche dans la langue du navigateur. Les chemins et les libellés de ces tutoriels sont ceux de l'interface **en anglais** : pour les suivre mot pour mot, choisir *English* dans *Settings → General → Language* (*Paramètres → Général → Langue*).
 6. Envoyer un premier message (par exemple « Bonjour ») pour charger le modèle, puis vérifier où il tourne :
 
    ```bash
@@ -94,9 +96,11 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
    ```bash
    docker compose exec ollama ollama run granite4.2:8b --verbose "Explique le RAG en trois phrases."
-   # prompt eval rate : vitesse de lecture du prompt (~250 tokens/s sur la référence)
    # eval rate        : vitesse de génération (~14,5 tokens/s sur la référence)
+   # prompt eval rate : vitesse de lecture du prompt, peu significative ici (voir ci-dessous)
    ```
+
+   Sur un prompt aussi court (une vingtaine de tokens), le *prompt eval rate* affiché est bas (~70 tokens/s sur la référence) et ne mesure pas la vraie vitesse de lecture. Celle-ci se lit sur une requête avec un document joint, dans les logs d'Ollama (section 8) : ~250 tokens/s sur la référence.
 
    Plus la génération est lente, plus les réglages des sections 3 et 4 comptent. En mode CPU, elle peut descendre à quelques tokens/s : préférer alors un modèle plus petit.
 
@@ -106,13 +110,15 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
 ## 3. Réglages du modèle
 
-**Chemin** : *Admin Panel → Settings → Models → granite4.2:8b*
+**Chemin** : *Admin Panel → Settings → Models → granite4.2:8b* (icône crayon)
+
+*Admin Panel* se trouve dans le menu de l'avatar, en bas à gauche. Son onglet *Settings* ouvre une fenêtre dont la colonne de gauche regroupe, sous **Admin**, les sections *System*, *AI* (dont *Models*), *Experience* (dont *Interface*) et *Tools* (dont *Documents*). Les chemins de ce tutoriel désignent ces entrées.
 
 Ces réglages s'appliquent à toutes les conversations qui utilisent ce modèle. Ils sont enregistrés dans la base d'Open WebUI et non dans Ollama.
 
 ### 3.1 Advanced Params
 
-Cliquer sur **Show** à droite de *Advanced Params* pour afficher la liste. Chaque paramètre affiche *Default* tant qu'on ne clique pas dessus.
+Cliquer sur **Show** à droite de *Advanced Params* pour afficher la liste. Chaque paramètre affiche *Default* tant qu'on ne clique pas dessus. Un clic sur *Default* fait défiler les valeurs possibles : pour **think (Ollama)**, *On*, puis *Custom*, puis **Off** (trois clics) ; pour *max_tokens* et *Temperature*, un clic affiche *Custom* et un champ où saisir la valeur.
 
 | Paramètre | Valeur | Ce que ça implique |
 |---|---|---|
@@ -138,6 +144,7 @@ Plus bas sur la même page.
 | Status Updates | ✅ | Affiche l'avancement (« recherche dans les documents… »), utile vu les temps de réponse. |
 | Vision | ❌ | `granite4.2:8b` ne lit pas les images. Une image jointe serait ignorée ou provoquerait une erreur. |
 | Web Search, Image Generation, Code Interpreter, Terminal | ❌ | Aucun de ces services n'est configuré dans la stack. Les laisser actifs propose des fonctions qui échoueraient. |
+| Usage, Memory | inchangés | *Usage* affiche les compteurs de tokens. *Memory* est expliquée au [tutoriel 02, §9.2](02-assistant-workspace-open-webui.md#92-memory). |
 
 **Builtin Tools** : ❌ **décoché**.
 
@@ -173,7 +180,7 @@ Ce texte est ajouté au début de chaque conversation. Chaque consigne corrige u
 | *If the information is missing, say so* | Encourage le modèle à avouer qu'il ne sait pas plutôt qu'à halluciner. Sans cette consigne, c'est le premier risque d'un RAG. |
 | *Cite sources as [n], never mention source tags* | Open WebUI encadre les extraits par des balises `<source id="…">`. Le modèle avait tendance à les recopier dans sa réponse (« based on `<source id="2">`… »). |
 
-Adapter le rôle (« MBSE expert ») au domaine des documents. La consigne est en anglais parce que les documents d'origine l'étaient ; elle fonctionne aussi sur le corpus fictif en français, et le modèle répond dans la langue de la question.
+Adapter le rôle (« MBSE expert ») au domaine des documents. La consigne est en anglais parce que les documents d'origine l'étaient ; elle fonctionne aussi sur le corpus fictif en français. Le modèle répond en général dans la langue de la question, sauf quand il signale une information absente : mesuré sur le corpus fictif, cet aveu arrive en anglais, même en ajoutant « in the language of the question » à la consigne. Pour des réponses toujours en français, traduire la consigne.
 
 Valider avec **Save & Update**.
 
@@ -209,13 +216,14 @@ Valider avec **Save**.
 | Paramètre | Valeur | Ce que ça implique |
 |---|---|---|
 | **Embedding Model Engine / Model** | Ollama / `bge-m3` | Modèle multilingue (FR/EN) qui transforme chaque extrait en vecteur. Il tourne dans Ollama (sur le GPU si un profil GPU est actif) et reste chargé à côté du modèle de chat (`OLLAMA_MAX_LOADED_MODELS=2`). |
-| **Embedding Batch Size** | **32** | Nombre d'extraits envoyés en une fois au modèle d'embedding. À 1 (valeur par défaut), un document de 142 extraits fait 142 appels successifs (~38 s). En lot, l'indexation est plusieurs fois plus rapide. Cela n'a aucun effet sur la qualité. |
-| **Vector Database** | pgvector (`rag`) | Les vecteurs sont stockés dans Postgres (table `document_chunk`) et partagés avec n8n. |
+| **Embedding Batch Size** | **32** | Nombre d'extraits envoyés en une fois au modèle d'embedding. À 1 (valeur par défaut), un document de 180 extraits fait 180 appels à Ollama ; à 32, il en fait 6. Sur la configuration de référence, la durée ne change presque pas (~15 s dans les deux cas, *Async Embedding Processing* étant actif par défaut) : c'est le calcul des vecteurs qui domine. Le réglage allège surtout le trafic vers Ollama, sans effet sur la qualité. |
+| *Base vectorielle* | pgvector (`rag`) | Fixée par `docker-compose.yml` (`VECTOR_DB`), elle n'apparaît pas dans cet écran. Les vecteurs sont stockés dans Postgres (table `document_chunk`), dans la même base `rag` que ceux de n8n. |
 | **Chunk Size / Overlap** | 1000 / 150 | Taille des extraits en caractères (~250 tokens) et chevauchement entre deux extraits consécutifs. Des extraits plus petits rendent la recherche plus précise mais donnent moins de contexte. Le chevauchement évite de couper une idée en deux. |
 | **Markdown Header Text Splitter** | On | Découpe d'abord le document selon ses titres, puis selon la taille. Les extraits respectent ainsi la structure (sections, sous-sections). |
 | **Hybrid Search** | On | Combine la recherche par mots-clés (BM25) et la recherche sémantique (vecteurs). Le BM25 retrouve les termes exacts (acronymes, références comme « SysML v2 » ou « §4.2 »), là où la recherche sémantique seule échoue souvent sur du contenu technique. |
-| **Top K** | **8** | Nombre d'extraits injectés dans le prompt. À 5 (valeur par défaut, ~1 250 tokens), une question sur les livrables d'un cahier des charges a oublié le principal : le tableau des livrables était coupé en deux extraits, et un des 5 extraits était occupé par la table des matières. À 8 (~2 000 tokens), il faut compter ~4 s de lecture en plus par question, contre une bien meilleure couverture des listes et des tableaux. Au-delà de 10, le gain diminue et un modèle de 8B se perd dans trop de contexte. |
-| **Relevance Threshold** | 0 | Aucun filtrage par score : les 8 meilleurs extraits (Top K) sont toujours transmis. |
+| **Top K** | **8** | Nombre d'extraits injectés dans le prompt. À 5 (valeur de `docker-compose.yml`, ~1 250 tokens), une question sur les livrables d'un cahier des charges a oublié le principal : le tableau des livrables était coupé en deux extraits, et un des 5 extraits était occupé par la table des matières. À 8 (~2 000 tokens), il faut compter ~4 s de lecture en plus par question, contre une bien meilleure couverture des listes et des tableaux. Au-delà de 10, le gain diminue et un modèle de 8B se perd dans trop de contexte. |
+| **Top K Reranker** | **8** (comme Top K) | ⚠️ **Indispensable avec Hybrid Search.** En recherche hybride, Open WebUI ne garde que les *Top K Reranker* meilleurs extraits, même sans modèle de reranking : le nombre d'extraits transmis est le plus petit des deux réglages. Avec la valeur par défaut (3), *Top K = 8* n'a aucun effet et le modèle ne reçoit que 3 extraits. Mesuré sur le corpus fictif : avec 3 extraits, « Que demande l'exigence EX-04 ? » a reçu la réponse de l'exigence EX-05 ; avec 8, la bonne réponse. |
+| **Relevance Threshold** | 0 | Aucun filtrage par score : les 8 meilleurs extraits sont toujours transmis. |
 
 ### Limite du RAG : questions ciblées ou résumé global
 
@@ -224,7 +232,7 @@ Le RAG ne transmet au modèle que les **8 extraits les plus pertinents** (Top K)
 - ✅ **Questions ciblées** (« que recommande le rapport pour les profils L2 et L3 ? ») : c'est le cas d'usage idéal.
 - ⚠️ **Résumé global** (« résume ce document ») : le modèle ne voit qu'environ 6 % du texte et le résumé sera partiel.
 
-Pour un résumé, cliquer sur le fichier joint et choisir l'option qui utilise **le document entier** (*full context*). Le contenu complet est alors injecté, à deux conditions :
+Pour un résumé, cliquer sur le fichier joint à la conversation : sa fenêtre affiche un interrupteur *Using Focused Retrieval* (le RAG) ; l'activer le fait passer à **Using Entire Document**. Le contenu complet est alors injecté, à deux conditions :
 
 - **le document doit tenir dans le contexte de 32k tokens**, soit ~100 pages de texte dense ;
 - **il faut accepter la lecture du prompt** : ~2 minutes pour 30 000 tokens à ~250 tokens/s sur la configuration de référence.
@@ -244,9 +252,9 @@ Joindre un fichier à une conversation l'indexe **pour cette conversation seulem
    > Le bouton *Create* crée l'élément de l'onglet affiché. Sur l'onglet *Models*, il crée un modèle, pas une base.
 
 2. Renseigner un **nom** et une **description**. La description est visible par le modèle et l'aide à savoir quand s'en servir : décrire le contenu plutôt que l'usage. Pour l'exercice : nom `MBSE Expert`, description « Cahier des charges et proposition technique du Projet Héron : migration SysML v1 vers SysML v2 chez Acme Défense ».
-3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Pour l'exercice, ajouter les deux fichiers du dossier `local-llm/n8n/exemples/` : `sow-exemple.md` et `Proposition – Projet Héron, v2.md` (pas `verite-terrain.json`, qui sert au tutoriel 03). Avec un batch de 32, un document de 170 extraits est indexé en ~13 s sur la configuration de référence ; les deux documents fictifs, très courts, le sont en quelques secondes.
+3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Pour l'exercice, ajouter les deux fichiers du dossier `local-llm/n8n/exemples/` : `sow-exemple.md` et `Proposition – Projet Héron, v2.md` (pas `verite-terrain.json`, qui sert au tutoriel 03). Sur la configuration de référence, un document de 180 extraits est indexé en ~15 s ; les deux documents fictifs, très courts, le sont en quelques secondes.
 
-   > Le corpus fictif ne compte qu'une poignée d'extraits : Top K les transmet tous au modèle. Les limites du RAG décrites en section 5 n'apparaissent qu'avec des documents plus longs ; refaire l'exercice avec vos propres documents pour les observer.
+   > Le corpus fictif compte 13 extraits (4 pour le cahier des charges, 9 pour la proposition : le découpage par titres Markdown crée un extrait par section). Top K en transmet 8, soit plus de la moitié : les limites du RAG décrites en section 5 n'apparaissent vraiment qu'avec des documents plus longs. Refaire l'exercice avec vos propres documents pour les observer.
 
 ### 6.2 Choisir le bon format de fichier
 
@@ -269,7 +277,11 @@ Exemple observé : dans un tableau comparatif extrait d'un PDF, le modèle a att
 
 ### 6.4 Contrôler l'indexation
 
-Les extraits sont stockés dans la table `document_chunk` de la base `rag`. La colonne `collection_name` contient l'identifiant de la base de connaissances, ou `file-<id>` pour un fichier joint à une conversation.
+Les extraits sont stockés dans la table `document_chunk` de la base `rag`. La colonne `collection_name` contient :
+
+- l'identifiant de la base de connaissances, pour ses documents ;
+- `file-<id>` pour chaque fichier, qu'il soit joint à une conversation ou ajouté à une base : un document d'une base est donc indexé deux fois, une fois dans sa propre collection et une fois dans celle de la base ;
+- `knowledge-bases`, qui contient une entrée par base (nom et description), pour retrouver les bases elles-mêmes.
 
 ```bash
 docker compose exec postgres psql -U n8n -d rag -c "
@@ -307,6 +319,14 @@ Les exemples portent sur la base `MBSE Expert` créée en 6.1 avec le corpus fic
 
 Un petit modèle ne réussit pas toujours les cinq du premier coup : c'est justement ce que le tableau suivant aide à diagnostiquer.
 
+Mesuré sur la configuration de référence, avec les réglages de ce tutoriel (deux séries) :
+
+- les questions 1, 2 et 5 sont réussies ;
+- la question 3 est manquée à chaque essai : le modèle répond « oui » en citant l'exigence du cahier des charges (deux jours) comme si elle venait de la proposition. L'extrait de la proposition (« une journée ») figure pourtant dans les citations : c'est le cas « l'élément est dans une citation mais pas dans la réponse » du tableau ci-dessous ;
+- la relance 4 s'emballe : la bonne réponse (« non couverte ») arrive, puis le modèle commente ses propres citations jusqu'à la limite `max_tokens` (2 048 tokens, ~2 min 30 s). C'est le garde-fou de la section 3.1 qui l'arrête.
+
+Comparer deux documents exigence par exigence dépasse ce qu'un modèle de 8B fait de façon fiable en une seule réponse : c'est le rôle de l'agent n8n du [tutoriel 03](03-agent-n8n.md), qui traite une exigence à la fois et obtient 10 verdicts justes sur 10 sur ce corpus.
+
 ### Diagnostiquer une mauvaise réponse
 
 Toujours comparer la réponse aux citations. L'origine du problème est souvent dans la recherche, pas dans le modèle.
@@ -332,18 +352,20 @@ docker compose logs -f ollama | grep -E 'POST|new prompt|prompt eval|eval time'
 Ce qu'on doit observer pour une question avec un document joint (durées de la configuration de référence) :
 
 ```text
-POST "/api/chat" | 3.8s                        ← reformulation de la question (Retrieval Query Generation)
-new prompt, ... task.n_tokens = 1891           ← prompt système + question + extraits du document
-prompt eval time = 7181 ms / 1801 tokens       ← ~250 tokens/s
-       eval time = 15626 ms / 226 tokens       ← ~14,5 tokens/s
-POST "/api/chat" | 22.8s
+| 200 |  3.71s | 172.29.0.4 | POST "/api/chat"     ← reformulation de la question (Retrieval Query Generation)
+new prompt, n_ctx_slot = 32768, ... task.n_tokens = 998        ← consignes RAG + question + extraits
+prompt eval time =  3951.56 ms /   998 tokens (... 252.56 tokens per second)
+       eval time = 16254.06 ms /   235 tokens (... 14.40 tokens per second)
+| 200 | 20.23s | 172.29.0.4 | POST "/api/chat"     ← la réponse
 ```
+
+Les lignes réelles sont plus longues (horodatage, identifiants de tâche) ; seules les parties utiles sont reproduites. Les lignes `new prompt` avec `n_ctx_slot = 8192` et les `POST "/api/embed"` viennent de `bge-m3`, qui calcule les vecteurs de la question et des documents.
 
 Signes d'un problème :
 
 | Observation | Cause probable |
 |---|---|
-| `task.n_tokens` de quelques centaines avec un document joint | Les extraits ne sont pas injectés : vérifier *Builtin Tools* (3.2) et, pour un assistant, le mode *Function Calling* (Legacy). |
+| `task.n_tokens` de quelques dizaines seulement (la question seule) avec un document joint ; avec le corpus fictif, une question normale en compte 300 à 1 000 | Les extraits ne sont pas injectés : vérifier *Builtin Tools* (3.2) et, pour un assistant, le mode *Function Calling* (Legacy). |
 | Plusieurs `POST /api/chat` avant que la réponse ne s'affiche | Des tâches d'arrière-plan sont encore actives (section 4). |
 | Génération longue avec une réponse vide à l'écran | *think* n'est pas désactivé (3.1). |
 | `ollama ps` affiche un pourcentage de CPU alors qu'un profil GPU est actif | Le modèle ne tient pas en mémoire GPU, ou le GPU n'est pas détecté : voir la section 2, étape 6. |
@@ -366,6 +388,7 @@ Signes d'un problème :
 | | Title Generation | au choix |
 | Admin › Documents | Embedding Batch Size | 32 |
 | | Top K | 8 |
+| | Top K Reranker | 8 (sinon 3 extraits seulement en recherche hybride) |
 | Workspace › Knowledge | documents | DOCX de préférence au PDF |
 
 **Résultat** sur la configuration de référence : une question sur un document passe de plus de 5 minutes (sans aboutir) à **25–45 secondes** selon la longueur de la réponse, et Ollama est libre dès la fin de la réponse.
@@ -374,4 +397,4 @@ Signes d'un problème :
 
 - **Gagner en vitesse de génération** : seul un modèle *Mixture of Experts* (par exemple `granite4:tiny-h`, ~1B paramètres actifs par token) peut dépasser le plafond de génération d'un modèle dense (~14,5 tokens/s sur la référence), au prix d'un raisonnement moins solide.
 - **Améliorer le classement des extraits** : un modèle de *reranking* (par exemple `bge-reranker-v2-m3`) reclasse les extraits trouvés avant de les envoyer au modèle. La pertinence s'améliore, mais le calcul se fait sur le CPU du conteneur Open WebUI et ajoute quelques secondes par question.
-- **Nettoyer pgvector** : supprimer les collections `file-*` des fichiers joints lors d'essais (voir 6.4).
+- **Nettoyer pgvector** : supprimer les fichiers d'essai dans *Settings → Data Controls → Manage Files* ; Open WebUI efface alors aussi leur collection `file-*` (vérifié avec la requête de 6.4). Éviter de les supprimer directement en SQL : une collection `file-*` peut appartenir à un document d'une base (6.4).
