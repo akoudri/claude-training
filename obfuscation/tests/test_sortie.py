@@ -64,3 +64,12 @@ def test_un_saut_de_ligne_ne_sort_pas_des_commentaires(tmp_path):
     dictionnaire = charger_dictionnaires([chemin])
     assert dictionnaire.terme("Injecté") is None
     assert all(ligne.startswith(("#", "CLIENT:", "  - ", "    # ")) for ligne in contenu.splitlines())
+
+
+def test_caracteres_de_controle_dans_les_commentaires(tmp_path):
+    # Fréquents dans le texte extrait des PDF : PyYAML les refuse, même en commentaire.
+    candidat = Candidat("CLIENT", ["Novaltis"], 1, "contexte\x07avec\x00cloche\x9f")
+    contenu = rendre([candidat], ["CLIENT"], "m\x1b", ["fichier\x01.pdf — morceau 1/1"])
+    chemin = tmp_path / "c.candidats.yaml"
+    ecrire(chemin, contenu)
+    assert charger_dictionnaires([chemin]).terme("Novaltis") is not None

@@ -131,3 +131,11 @@ def test_expression_sans_majuscule_ecartee():
     c.ajouter([P("le prestataire", "PRESTATAIRE"), P("locaux du client", "LIEU"), P("le Groupe Valmont", "CLIENT")], texte)
     assert [k.variantes for k in c.candidats(texte)] == [["le Groupe Valmont"]]
     assert c.ecartees == 2
+
+
+def test_mots_generiques_precedes_d_un_article_ecartes():
+    c = collecte()
+    texte = "Ci-après le Client. Le Prestataire livre. Les Clients valident."
+    c.ajouter([P("le Client", "CLIENT"), P("Le Prestataire", "PRESTATAIRE"), P("Les Clients", "CLIENT")], texte)
+    assert c.candidats(texte) == []
+    assert c.ecartees == 3

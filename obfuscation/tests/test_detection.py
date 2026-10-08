@@ -1,5 +1,3 @@
-import pytest
-
 from obfuscation.detection import analyser
 from obfuscation.detection.ollama import ErreurOllama, ReponseInvalide
 from obfuscation.detection.ollama import Proposition as P
@@ -53,7 +51,11 @@ def test_document_sans_texte_aucun_appel():
     assert bilan.candidats == []
 
 
-def test_ollama_injoignable_interrompt():
-    client = FauxClient([ErreurOllama("injoignable")])
-    with pytest.raises(ErreurOllama):
-        analyser([("a.md", "texte")], client, CATEGORIES, Dictionnaire())
+def test_ollama_perdu_garde_les_candidats_deja_obtenus():
+    client = FauxClient([[P("Novaltis", "PRESTATAIRE")], ErreurOllama("injoignable")])
+    documents = [("a.md", "Novaltis signe."), ("b.md", "Acme paie."), ("c.md", "Héron.")]
+    bilan = analyser(documents, client, CATEGORIES, Dictionnaire())
+    assert len(client.appels) == 2  # rien n'est tenté après la perte du serveur
+    assert [c.variantes for c in bilan.candidats] == [["Novaltis"]]
+    assert bilan.interruption == "injoignable"
+    assert bilan.ignores == ["b.md — morceau 1/1", "c.md — morceau 1/1"]

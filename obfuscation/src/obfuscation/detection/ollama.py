@@ -8,6 +8,9 @@ from ..erreurs import ErreurConfiguration
 from .prompt import message_systeme, schema
 
 DELAI_VERIFICATION = 10.0
+# Sans proxy, quelles que soient les variables http_proxy de l'environnement : le texte des documents ne doit
+# jamais passer par un intermédiaire, même pour joindre la boucle locale.
+SANS_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 class ErreurOllama(ErreurConfiguration):
@@ -64,7 +67,7 @@ class ClientOllama:
         donnees = None if corps is None else json.dumps(corps).encode("utf-8")
         requete = urllib.request.Request(self.url + chemin, data=donnees, headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(requete, timeout=delai) as reponse:
+            with SANS_PROXY.open(requete, timeout=delai) as reponse:
                 return json.loads(reponse.read())
         except urllib.error.HTTPError as e:
             if e.code == 404:

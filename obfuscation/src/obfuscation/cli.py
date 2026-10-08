@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .controle import Controle
 from .detection import CATEGORIES_PAR_DEFAUT, MODELE_PAR_DEFAUT, URL_PAR_DEFAUT, analyser
-from .detection.ollama import ClientOllama, ErreurOllama
+from .detection.ollama import ClientOllama
 from .detection.sortie import ecrire, rendre
 from .dictionnaire import CATEGORIE, Dictionnaire, charger_dictionnaires
 from .erreurs import ErreurConfiguration, ErreurFichier, ErreurTable
@@ -188,6 +188,8 @@ def main_detecter(argv: list[str] | None = None) -> int:
         categories = _categories(args.categories)
         if args.sortie.exists():
             raise ErreurConfiguration(f"{args.sortie} existe déjà : un dictionnaire candidat relu ne doit pas être écrasé")
+        if not args.sortie.parent.is_dir():
+            raise ErreurConfiguration(f"{args.sortie.parent} : dossier introuvable pour le dictionnaire candidat")
         exclus = charger_dictionnaires(args.dictionnaire)
         client = ClientOllama(args.ollama_url, args.modele, args.delai)
         client.verifier()
@@ -212,14 +214,17 @@ def main_detecter(argv: list[str] | None = None) -> int:
             continue
         # Les noms de fichiers et de dossiers peuvent eux aussi contenir des termes sensibles.
         documents.append((str(relatif), "\n".join([*relatif.parts, texte])))
+    bilan = analyser(documents, client, categories, exclus, _signaler)
     try:
-        bilan = analyser(documents, client, categories, exclus, _signaler)
-    except ErreurOllama as e:
-        _signaler("erreur", str(e))
+        ecrire(args.sortie, rendre(bilan.candidats, categories, args.modele, bilan.ignores))
+    except FileExistsError:
+        _signaler("erreur", f"{args.sortie} a été créé pendant l'analyse : rien n'est écrasé")
         return ECHEC_CONFIGURATION
-    ecrire(args.sortie, rendre(bilan.candidats, categories, args.modele, bilan.ignores))
     if bilan.ignores:
         code = ECHEC_FICHIERS
+    if bilan.interruption is not None:
+        _signaler("erreur", f"analyse interrompue, candidat partiel écrit : {bilan.interruption}")
+        code = ECHEC_CONFIGURATION
     print(
         f"Dictionnaire candidat : {args.sortie} ({len(bilan.candidats)} candidats ; {bilan.rejetees} propositions "
         f"absentes du texte, rejetées ; {len(bilan.ignores)} morceaux non analysés). À relire avant usage.",

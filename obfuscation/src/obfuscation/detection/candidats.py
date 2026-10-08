@@ -68,7 +68,7 @@ class Collecte:
                 proposition.categorie not in self.categories
                 or len(terme) < LONGUEUR_MIN
                 or not any(c.isalpha() for c in terme)
-                or normaliser(terme) in MOTS_GENERIQUES
+                or normaliser(DETERMINANT.sub("", terme, count=1)) in MOTS_GENERIQUES
             ):
                 self.ecartees += 1
                 continue

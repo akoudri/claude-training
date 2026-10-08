@@ -68,3 +68,14 @@ def test_delai_depasse(faux_ollama):
     faux_ollama.reponses = [(200, reponse_chat([]), 1.0)]
     with pytest.raises(ReponseInvalide, match="pas de réponse"):
         ClientOllama(faux_ollama.url, "granite4.2:8b", delai=0.2).entites("texte", CATEGORIES)
+
+
+def test_ignore_les_proxys_de_l_environnement(faux_ollama, monkeypatch):
+    # Le texte des documents ne doit jamais partir vers un proxy, même configuré pour toutes les adresses.
+    import urllib.request
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.setattr(urllib.request, "_opener", None)
+    ClientOllama(faux_ollama.url, "granite4.2:8b").verifier()

@@ -14,8 +14,9 @@ SIMPLE = re.compile(r"[^\W\d_][\w .'’&-]*")
 
 def _ligne(texte: str) -> str:
     """Texte placé dans un commentaire : sur une seule ligne. Un saut de ligne (nom de fichier, contexte) sortirait
-    du commentaire et injecterait des entrées dans le dictionnaire."""
-    return " ".join(texte.split())
+    du commentaire et injecterait des entrées dans le dictionnaire. Les caractères non imprimables (fréquents dans le
+    texte des PDF) sont refusés par PyYAML, même en commentaire : ils deviennent des espaces."""
+    return " ".join("".join(c if c.isprintable() else " " for c in texte).split())
 
 
 def _scalaire(terme: str) -> str:

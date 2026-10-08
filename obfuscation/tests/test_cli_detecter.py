@@ -91,3 +91,22 @@ def test_fichier_illisible_code_1(espace, faux_ollama):
     faux_ollama.reponses = [(200, reponse_chat([{"terme": "Novaltis", "categorie": "PRESTATAIRE"}]), 0)]
     assert detecter(espace, faux_ollama) == 1
     assert charger_dictionnaires([espace / "client.candidats.yaml"]).terme("Novaltis") is not None
+
+
+def test_dossier_de_sortie_absent(espace, faux_ollama):
+    code = cli.main_detecter([str(espace / "docs"), "-o", str(espace / "absent" / "c.candidats.yaml"), "--ollama-url", faux_ollama.url])
+    assert code == 2
+    assert faux_ollama.requetes == []
+
+
+def test_ollama_perdu_ecrit_le_candidat_partiel(espace, faux_ollama, capsys):
+    (espace / "docs" / "suite.md").write_text("Acme paie.\n", encoding="utf-8")
+    faux_ollama.reponses = [
+        (200, reponse_chat([{"terme": "Novaltis", "categorie": "PRESTATAIRE"}]), 0),
+        (404, {"error": "model not found"}, 0),
+    ]
+    assert detecter(espace, faux_ollama) == 2
+    contenu = (espace / "client.candidats.yaml").read_text(encoding="utf-8")
+    assert "suite.md — morceau 1/1" in contenu
+    assert charger_dictionnaires([espace / "client.candidats.yaml"]).terme("Novaltis") is not None
+    assert "ollama pull" in capsys.readouterr().err

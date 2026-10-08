@@ -18,7 +18,7 @@ from obfuscation.detection import CATEGORIES_PAR_DEFAUT, MODELE_PAR_DEFAUT, URL_
 from obfuscation.detection.mesure import comparer
 from obfuscation.detection.ollama import ClientOllama, ErreurOllama
 from obfuscation.dictionnaire import Dictionnaire, charger_dictionnaires
-from obfuscation.erreurs import ErreurConfiguration, ErreurFichier
+from obfuscation.erreurs import ErreurConfiguration
 from obfuscation.extraction import extraire
 from obfuscation.formats.fichier import EXTENSIONS_LISIBLES
 
@@ -55,7 +55,7 @@ def documents(dossier: Path) -> list[tuple[str, str]]:
     for i, fichier in enumerate(fichiers, 1):
         try:
             resultat.append((f"document {i}", "\n".join([*fichier.relative_to(dossier).parts, extraire(fichier)])))
-        except (ErreurFichier, OSError):
+        except Exception:  # message sans détail : il citerait le chemin ou le contenu du document
             print(f"document {i} illisible, ignoré", file=sys.stderr)
     return resultat
 
@@ -73,9 +73,13 @@ def main() -> int:
         return 2
     try:
         reference = charger_dictionnaires([args.reference])
+    except ErreurConfiguration:  # le message citerait un terme ou un extrait du dictionnaire
+        print("erreur : dictionnaire de référence illisible ou invalide (le vérifier avec « obfusquer »)", file=sys.stderr)
+        return 2
+    try:
         client = ClientOllama(args.ollama_url, args.modele)
         client.verifier()
-    except (ErreurConfiguration, ErreurOllama) as e:
+    except ErreurOllama as e:  # ne cite que l'URL et le modèle
         print(f"erreur : {e}", file=sys.stderr)
         return 2
     docs = documents(args.dossier)
@@ -84,10 +88,9 @@ def main() -> int:
     scores = []
     for n in range(1, args.executions + 1):
         chrono = Chronometre(client)
-        try:
-            bilan = analyser(docs, chrono, CATEGORIES_PAR_DEFAUT, Dictionnaire(), chrono.signaler)
-        except ErreurOllama as e:
-            print(f"erreur : {e}", file=sys.stderr)
+        bilan = analyser(docs, chrono, CATEGORIES_PAR_DEFAUT, Dictionnaire(), chrono.signaler)
+        if bilan.interruption is not None:
+            print(f"erreur : {bilan.interruption}", file=sys.stderr)
             return 2
         score = comparer(bilan.candidats, reference, texte)
         scores.append(score)
