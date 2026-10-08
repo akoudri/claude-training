@@ -35,6 +35,13 @@ def _fichiers(chemins: list[Path], sortie: Path) -> Iterator[tuple[Path, Path]]:
             yield chemin, Path(chemin.name)
 
 
+def _verifier_sortie(chemins: list[Path], sortie: Path) -> None:
+    """Les fichiers placés dans le dossier de sortie sont ignorés : une sortie qui contient les sources ne traiterait rien."""
+    for chemin in chemins:
+        if chemin.resolve().is_relative_to(sortie.resolve()):
+            raise ErreurConfiguration(f"{sortie} : le dossier de sortie contient les documents sources ({chemin})")
+
+
 def _transformer_chemin(relatif: Path, moteur: Moteur, sens: Sens) -> Path:
     """Les noms de fichiers et de dossiers peuvent eux aussi contenir des termes sensibles."""
     return Path(*(moteur.transformer(partie, sens) for partie in relatif.parts))
@@ -126,6 +133,7 @@ def main_obfusquer(argv: list[str] | None = None) -> int:
     try:
         if args.table.resolve().is_relative_to(args.sortie.resolve()):
             raise ErreurTable(f"{args.table} : la table ne doit pas être dans le dossier de sortie, elle partirait avec les documents")
+        _verifier_sortie(args.chemins, args.sortie)
         moteur = Moteur(charger_dictionnaires(args.dictionnaire), Table.charger(args.table))
     except ErreurConfiguration as e:
         _signaler("erreur", str(e))
@@ -148,6 +156,8 @@ def main_restaurer(argv: list[str] | None = None) -> int:
     try:
         if not args.table.exists():
             raise ErreurTable(f"{args.table} : table introuvable")
+        if not entree_standard:
+            _verifier_sortie([Path(c) for c in args.chemins], args.sortie)
         moteur = Moteur(Dictionnaire(), Table.charger(args.table))
     except ErreurConfiguration as e:
         _signaler("erreur", str(e))

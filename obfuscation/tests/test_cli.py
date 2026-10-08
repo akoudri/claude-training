@@ -145,3 +145,14 @@ def test_aucune_version_perimee_ne_subsiste(espace):
     (espace / "docs" / "note.md").write_text("rien\n", encoding="utf-8")
     assert obfusquer(espace) == 0
     assert not (espace / "sortie" / "NON-CONFORME_note.md").exists()
+
+
+@pytest.mark.parametrize("relative", [".", ".."])
+def test_sortie_contenant_les_sources_refusee(espace, capsys, relative):
+    sortie = (espace / "docs" / relative).resolve()
+    assert obfusquer(espace, sortie=sortie, table=espace.parent / "t.table.json") == 2
+    assert "contient les documents sources" in capsys.readouterr().err
+    table = espace.parent / "vide.table.json"
+    table.write_text('{"version": 1, "jetons": {}}', encoding="utf-8")
+    assert cli.main_restaurer([str(espace / "docs"), "-t", str(table), "-o", str(sortie)]) == 2
+    assert "contient les documents sources" in capsys.readouterr().err

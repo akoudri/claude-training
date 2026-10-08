@@ -32,6 +32,9 @@ uv run restaurer - -t ~/.obfuscation/mon-client.table.json < reponse.txt
   `Proposition [CLIENT_1].docx`).
 - Un PDF devient un fichier Markdown (`contrat.pdf` → `contrat.md`) : la mise en page est perdue, le texte est
   conservé.
+- Le dossier de sortie ne doit pas contenir les documents sources (commande refusée sinon).
+- `restaurer` reconnaît aussi les jetons reformatés par Markdown : `**[CLIENT_1]**`, `\[CLIENT_1\]`,
+  `_CLIENT_1_`, `CLIENT\_1`, ou `CLIENT_1` sans crochets.
 - Codes de retour : `0` succès, `1` au moins un fichier en erreur ou non conforme, `2` erreur de configuration.
 
 ## Dictionnaires
