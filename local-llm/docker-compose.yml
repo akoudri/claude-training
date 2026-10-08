@@ -11,6 +11,8 @@
 #   ollama-init : télécharge le modèle de chat et le modèle d'embedding au démarrage
 #   postgres    : base n8n + base "rag" avec pgvector (vector store partagé)
 #   open-webui  : chat + RAG documentaire (vecteurs dans pgvector)
+#   open-webui-init : applique au modèle de base les réglages du tutoriel 01 et, si OPENWEBUI_EXEMPLES=true,
+#                     crée la base et l'assistant d'exemple (open-webui/configurer.py), puis s'arrête
 #   ollama-gateway : seule porte d'entrée des dev containers (réseau "agents", sans Internet)
 #                    vers Ollama, limitée à l'API Messages (voir ollama-gateway/nginx.conf)
 #
@@ -77,6 +79,10 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      # Compte administrateur créé au premier démarrage (inscriptions ensuite fermées). Vides : le premier
+      # compte créé dans l'interface devient administrateur, et open-webui-init ne configure rien.
+      - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-}
       - ENABLE_OPENAI_API=false
       - DEFAULT_MODELS=${LLM_MODEL}
       # RAG : embeddings calculés par Ollama, vecteurs stockés dans pgvector
@@ -85,19 +91,44 @@ services:
       - RAG_OLLAMA_BASE_URL=http://ollama:11434
       - VECTOR_DB=pgvector
       - PGVECTOR_DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/rag
+      # Les variables suivantes ne sont lues qu'au PREMIER démarrage (PersistentConfig, tutoriel 01, section 2) :
+      # ensuite, c'est la base d'Open WebUI qui fait foi, et on les modifie dans l'interface d'administration.
       # Embeddings par lots de 32, deux requêtes à la fois : sinon une requête par extrait, toutes lancées en
       # même temps, et un gros PDF épuise les descripteurs de fichiers ("Too many open files").
       - RAG_EMBEDDING_BATCH_SIZE=32
       - RAG_EMBEDDING_CONCURRENT_REQUESTS=2
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=150
-      - RAG_TOP_K=5
       - ENABLE_RAG_HYBRID_SEARCH=true  # BM25 + vecteurs, meilleur sur du contenu technique
+      - RAG_TOP_K=8
+      - RAG_TOP_K_RERANKER=8           # en recherche hybride, le plus petit des deux Top K s'applique
+      # Tâches d'arrière-plan (tutoriel 01, section 4) : chacune occupe Ollama, qui ne traite qu'une requête à la fois
+      - ENABLE_FOLLOW_UP_GENERATION=false
+      - ENABLE_TAGS_GENERATION=false
+      - ENABLE_SEARCH_QUERY_GENERATION=false
+      - ENABLE_AUTOCOMPLETE_GENERATION=false
+      - ENABLE_RETRIEVAL_QUERY_GENERATION=true
     volumes: [openwebui:/app/backend/data]
     ports: ["127.0.0.1:3000:8080"]
     depends_on:
       ollama: { condition: service_healthy }
       postgres: { condition: service_healthy }
+
+  open-webui-init:
+    image: ghcr.io/open-webui/open-webui:main   # pour son Python : rien d'Open WebUI n'est importé
+    entrypoint: ["python3", "/init/configurer.py"]
+    environment:
+      - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-}
+      - LLM_MODEL=${LLM_MODEL}
+      - OPENWEBUI_EXEMPLES=${OPENWEBUI_EXEMPLES:-false}
+    volumes:
+      - ./open-webui:/init:ro
+      - ./n8n/exemples:/exemples:ro
+    depends_on:
+      open-webui: { condition: service_healthy }
+      ollama-init: { condition: service_completed_successfully }  # bge-m3 requis pour indexer les exemples
+    restart: "no"
 
   ollama-gateway:
     <<: *restart

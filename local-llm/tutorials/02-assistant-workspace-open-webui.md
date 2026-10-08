@@ -2,7 +2,9 @@
 
 Ce guide explique comment assembler un **assistant spécialisé** (un « agent ») dans Open WebUI 0.11 : un modèle, des consignes, une base de documents et, si besoin, des outils. Il prend pour exemple l'assistant **Expert MBSE** construit sur `granite4.2:8b` et la base **MBSE Expert**.
 
-Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG). Les réglages du tutoriel 01 sont supposés faits, et la base **MBSE Expert** créée avec le corpus fictif (tutoriel 01, section 6.1). Les commandes `docker compose` se lancent depuis le dossier `local-llm/`.
+Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG). Les réglages du tutoriel 01 sont supposés faits, et la base **MBSE Expert** créée avec le corpus fictif (tutoriel 01, section 6.1).
+
+> Avec `OPENWEBUI_EXEMPLES=true` dans `.env` ([tutoriel 01, section 2](01-configuration-open-webui.md#2-premier-démarrage)), le service `open-webui-init` a déjà créé la base et l'assistant **Expert MBSE** avec les valeurs des sections 3 et 5. Suivez alors ces sections pour comprendre chaque réglage et le vérifier dans l'interface, puis passez aux tests (section 6). Les commandes `docker compose` se lancent depuis le dossier `local-llm/`.
 
 ---
 

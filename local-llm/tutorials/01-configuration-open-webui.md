@@ -52,6 +52,13 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 ## 2. Premier démarrage
 
 1. Depuis le dossier `local-llm/`, créer le fichier de configuration : `cp .env.example .env`. Remplacer ensuite chaque `change-me` par une valeur aléatoire, générée par exemple avec `openssl rand -hex 32` (une valeur différente pour chaque secret).
+
+   Le compte administrateur d'Open WebUI se règle aussi dans `.env` :
+
+   | Variable | Effet |
+   |---|---|
+   | `WEBUI_ADMIN_EMAIL`, `WEBUI_ADMIN_PASSWORD` | Compte administrateur créé au premier démarrage ; les inscriptions sont ensuite fermées. Le service `open-webui-init` s'en sert pour appliquer au modèle de base les réglages de la section 3. Laissées vides, le premier compte créé dans l'interface devient administrateur, et toute la configuration de la section 3 se fait à la main. |
+   | `OPENWEBUI_EXEMPLES` | `true` : `open-webui-init` crée aussi la base `MBSE Expert` (section 6.1) et l'assistant `Expert MBSE` du [tutoriel 02](02-assistant-workspace-open-webui.md). `false` (défaut) : ces deux exercices restent à faire. |
 2. **Adapter la stack à la machine**, dans `.env` :
 
    | Machine | Ligne à décommenter dans `.env` | Vérification |
@@ -80,7 +87,16 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
    Si `ollama-init` s'arrête avec un code différent de 0 (coupure réseau, nom de modèle erroné dans `.env`), corriger la cause puis relancer le téléchargement avec `docker compose up ollama-init`.
 
-5. Ouvrir http://localhost:3000 et créer le compte. **Le premier compte créé devient administrateur.** Si la liste des modèles est vide, le téléchargement n'est pas terminé (étape 4) : recharger la page une fois qu'il est fini.
+   Une fois les modèles téléchargés, le service `open-webui-init` configure Open WebUI, puis s'arrête :
+
+   ```bash
+   docker compose logs open-webui-init        # "modèle de base granite4.2:8b : réglé", puis la base et l'assistant si OPENWEBUI_EXEMPLES=true
+   docker compose ps -a open-webui-init       # doit afficher "Exited (0)"
+   ```
+
+   Il peut être relancé à tout moment avec `docker compose up open-webui-init` : il remet le modèle de base aux valeurs de la section 3 (une modification faite entre-temps dans l'interface est alors perdue) et ne recrée pas la base ni l'assistant s'ils existent déjà.
+
+5. Ouvrir http://localhost:3000 et se connecter avec le compte de `.env` (`WEBUI_ADMIN_EMAIL`, `WEBUI_ADMIN_PASSWORD`). Si ces variables sont vides, créer le compte : **le premier compte créé devient administrateur.** Si la liste des modèles est vide, le téléchargement n'est pas terminé (étape 4) : recharger la page une fois qu'il est fini.
 
    > **Langue de l'interface** : Open WebUI s'affiche dans la langue du navigateur. Les chemins et les libellés de ces tutoriels sont ceux de l'interface **en anglais** : pour les suivre mot pour mot, choisir *English* dans *Settings → General → Language* (*Paramètres → Général → Langue*).
 6. Envoyer un premier message (par exemple « Bonjour ») pour charger le modèle, puis vérifier où il tourne :
@@ -107,6 +123,8 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
    Plus la génération est lente, plus les réglages des sections 3 et 4 comptent. En mode CPU, elle peut descendre à quelques tokens/s : préférer alors un modèle plus petit.
 
 > ⚠️ **PersistentConfig** : au premier démarrage, Open WebUI copie les variables d'environnement (`RAG_TOP_K`, `CHUNK_SIZE`…) dans sa base (`webui.db`). Ensuite, **c'est la base qui fait foi**. Modifier `docker-compose.yml` n'a plus d'effet sur ces réglages : il faut passer par l'interface d'administration.
+>
+> `docker-compose.yml` fixe déjà, par ces variables, les réglages des sections 4 et 5. Sur une installation neuve, ces sections servent donc à **comprendre et vérifier** les valeurs, pas à les saisir. Une installation antérieure garde ses anciennes valeurs : il faut les reporter à la main, ou repartir de zéro en supprimant le volume d'Open WebUI (`docker compose down`, puis `docker volume rm local-llm_openwebui` ; les conversations, comptes et bases de connaissances sont alors perdus).
 
 ---
 
@@ -117,6 +135,8 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 *Admin Panel* se trouve dans le menu de l'avatar, en bas à gauche. Son onglet *Settings* ouvre une fenêtre dont la colonne de gauche regroupe, sous **Admin**, les sections *System*, *AI* (dont *Models*), *Experience* (dont *Interface*) et *Tools* (dont *Documents*). Les chemins de ce tutoriel désignent ces entrées.
 
 Ces réglages s'appliquent à toutes les conversations qui utilisent ce modèle. Ils sont enregistrés dans la base d'Open WebUI et non dans Ollama.
+
+> Avec un compte administrateur défini dans `.env` (section 2), `open-webui-init` a déjà appliqué les valeurs des sections 3.1 et 3.2 : ouvrir l'écran pour les vérifier.
 
 ### 3.1 Advanced Params
 
@@ -194,6 +214,8 @@ Valider avec **Save & Update**.
 
 > Attention à ne pas confondre avec *Personal › Interface* (en haut du menu), qui ne contient que les préférences d'affichage de l'utilisateur.
 
+Ces valeurs sont fixées par `docker-compose.yml` (variables `ENABLE_*_GENERATION`) sur une installation neuve.
+
 Open WebUI utilise le modèle de chat pour de petites tâches automatiques. Avec une seule requête traitée à la fois, **chacune bloque le GPU** : avant la réponse, elle retarde son démarrage ; après, elle retarde la question suivante.
 
 | Tâche | Valeur | Coût mesuré | Ce que ça implique |
@@ -215,15 +237,18 @@ Valider avec **Save**.
 
 **Chemin** : *Admin Panel → Settings → Tools › Documents*
 
+Sur une installation neuve, ces valeurs viennent de `docker-compose.yml`.
+
 | Paramètre | Valeur | Ce que ça implique |
 |---|---|---|
 | **Embedding Model Engine / Model** | Ollama / `bge-m3` | Modèle multilingue (FR/EN) qui transforme chaque extrait en vecteur. Il tourne dans Ollama (sur le GPU si un profil GPU est actif) et reste chargé à côté du modèle de chat (`OLLAMA_MAX_LOADED_MODELS=2`). |
-| **Embedding Batch Size** | **32** | Nombre d'extraits envoyés en une fois au modèle d'embedding. À 1 (valeur par défaut), un document de 180 extraits fait 180 appels à Ollama ; à 32, il en fait 6. Sur la configuration de référence, la durée ne change presque pas (~15 s dans les deux cas, *Async Embedding Processing* étant actif par défaut) : c'est le calcul des vecteurs qui domine. Le réglage allège surtout le trafic vers Ollama, sans effet sur la qualité. |
+| **Embedding Batch Size** | **32** | Nombre d'extraits envoyés en une fois au modèle d'embedding. À 1 (valeur par défaut d'Open WebUI), un document de 180 extraits fait 180 appels à Ollama ; à 32, il en fait 6. Sur la configuration de référence, la durée ne change presque pas (~15 s dans les deux cas) : c'est le calcul des vecteurs qui domine. Le réglage allège le trafic vers Ollama, sans effet sur la qualité. |
+| **Concurrent Requests** | **2** | Nombre d'appels d'embedding lancés en même temps (*Async Embedding Processing* actif). À 0 (valeur par défaut d'Open WebUI), il n'y a aucune limite : avec des lots de 1, un PDF de plus de ~1 000 extraits ouvre autant de connexions simultanées et dépasse la limite de 1 024 fichiers ouverts du conteneur. L'indexation échoue alors avec `Cannot connect to host ollama:11434 ssl:default [Too many open files]`. Plus de parallélisme n'accélère rien : Ollama traite une requête à la fois. |
 | *Base vectorielle* | pgvector (`rag`) | Fixée par `docker-compose.yml` (`VECTOR_DB`), elle n'apparaît pas dans cet écran. Les vecteurs sont stockés dans Postgres (table `document_chunk`), dans la même base `rag` que ceux de n8n. |
 | **Chunk Size / Overlap** | 1000 / 150 | Taille des extraits en caractères (~250 tokens) et chevauchement entre deux extraits consécutifs. Des extraits plus petits rendent la recherche plus précise mais donnent moins de contexte. Le chevauchement évite de couper une idée en deux. |
 | **Markdown Header Text Splitter** | On | Découpe d'abord le document selon ses titres, puis selon la taille. Les extraits respectent ainsi la structure (sections, sous-sections). |
 | **Hybrid Search** | On | Combine la recherche par mots-clés (BM25) et la recherche sémantique (vecteurs). Le BM25 retrouve les termes exacts (acronymes, références comme « SysML v2 » ou « §4.2 »), là où la recherche sémantique seule échoue souvent sur du contenu technique. |
-| **Top K** | **8** | Nombre d'extraits injectés dans le prompt. À 5 (valeur de `docker-compose.yml`, ~1 250 tokens), une question sur les livrables d'un cahier des charges a oublié le principal : le tableau des livrables était coupé en deux extraits, et un des 5 extraits était occupé par la table des matières. À 8 (~2 000 tokens), il faut compter ~4 s de lecture en plus par question, contre une bien meilleure couverture des listes et des tableaux. Au-delà de 10, le gain diminue et un modèle de 8B se perd dans trop de contexte. |
+| **Top K** | **8** | Nombre d'extraits injectés dans le prompt. À 5 (~1 250 tokens), une question sur les livrables d'un cahier des charges a oublié le principal : le tableau des livrables était coupé en deux extraits, et un des 5 extraits était occupé par la table des matières. À 8 (~2 000 tokens), il faut compter ~4 s de lecture en plus par question, contre une bien meilleure couverture des listes et des tableaux. Au-delà de 10, le gain diminue et un modèle de 8B se perd dans trop de contexte. |
 | **Top K Reranker** | **8** (comme Top K) | ⚠️ **Indispensable avec Hybrid Search.** En recherche hybride, Open WebUI ne garde que les *Top K Reranker* meilleurs extraits, même sans modèle de reranking : le nombre d'extraits transmis est le plus petit des deux réglages. Avec la valeur par défaut (3), *Top K = 8* n'a aucun effet et le modèle ne reçoit que 3 extraits. Mesuré sur le corpus fictif : avec 3 extraits, « Que demande l'exigence EX-04 ? » a reçu la réponse de l'exigence EX-05 ; avec 8, la bonne réponse. |
 | **Relevance Threshold** | 0 | Aucun filtrage par score : les 8 meilleurs extraits sont toujours transmis. |
 
@@ -255,6 +280,8 @@ Joindre un fichier à une conversation l'indexe **pour cette conversation seulem
 
 2. Renseigner un **nom** et une **description**. La description est visible par le modèle et l'aide à savoir quand s'en servir : décrire le contenu plutôt que l'usage. Pour l'exercice : nom `MBSE Expert`, description « Cahier des charges et proposition technique du Projet Héron : migration SysML v1 vers SysML v2 chez Acme Défense ».
 3. Ajouter les documents par glisser-déposer et attendre la fin de l'indexation de chacun. Pour l'exercice, ajouter les deux fichiers du dossier `local-llm/n8n/exemples/` : `sow-exemple.md` et `Proposition – Projet Héron, v2.md` (pas `verite-terrain.json`, qui sert au tutoriel 03). Sur la configuration de référence, un document de 180 extraits est indexé en ~15 s ; les deux documents fictifs, très courts, le sont en quelques secondes.
+
+   > Avec `OPENWEBUI_EXEMPLES=true` (section 2), `open-webui-init` a déjà créé cette base avec les deux documents : il suffit de l'ouvrir pour vérifier les étapes ci-dessus.
 
    > Le corpus fictif compte 13 extraits (4 pour le cahier des charges, 9 pour la proposition : le découpage par titres Markdown crée un extrait par section). Top K en transmet 8, soit plus de la moitié : les limites du RAG décrites en section 5 n'apparaissent vraiment qu'avec des documents plus longs. Refaire l'exercice avec vos propres documents pour les observer.
 
@@ -389,9 +416,12 @@ Signes d'un problème :
 | | Retrieval Query Generation | On |
 | | Title Generation | au choix |
 | Admin › Documents | Embedding Batch Size | 32 |
+| | Concurrent Requests | 2 (sinon « Too many open files » sur un gros document) |
 | | Top K | 8 |
 | | Top K Reranker | 8 (sinon 3 extraits seulement en recherche hybride) |
 | Workspace › Knowledge | documents | DOCX de préférence au PDF |
+
+Sur une installation neuve, les lignes *Interface* et *Documents* viennent de `docker-compose.yml`, et les lignes *Models* de `open-webui-init` si un compte administrateur est défini dans `.env`.
 
 **Résultat** sur la configuration de référence : une question sur un document passe de plus de 5 minutes (sans aboutir) à **25–45 secondes** selon la longueur de la réponse, et Ollama est libre dès la fin de la réponse.
 

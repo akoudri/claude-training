@@ -13,7 +13,7 @@ Tout le contenu est rédigé en français.
 - `argos-marketplace/` : marketplace de démonstration (plugin `argos-toolkit@janus-argos`), extension du lab M2.
 - `mcp/` : démos de serveurs MCP en Python (uv). `server.py` (bloc-notes NotesRapides), `blender_mcp_server.py` + `blender_server.py` (pont Claude Code → Blender, TCP 9876).
 - `obfuscation/` : outil Python (uv) d'obfuscation réversible de documents Word, Excel, PowerPoint et PDF par dictionnaires, avant envoi à Claude (`obfusquer` / `restaurer`, et `detecter` qui propose un dictionnaire candidat à l'aide de l'Ollama de `local-llm/`).
-- `local-llm/` : stack LLM locale (Ollama sur CPU, ou sur GPU via `docker-compose.vulkan.yml` / `docker-compose.nvidia.yml` choisis par `COMPOSE_FILE` dans `.env` ; Open WebUI, pgvector, passerelle nginx ; n8n optionnel via `docker-compose.n8n.yml`, ajouté à `COMPOSE_FILE`) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
+- `local-llm/` : stack LLM locale (Ollama sur CPU, ou sur GPU via `docker-compose.vulkan.yml` / `docker-compose.nvidia.yml` choisis par `COMPOSE_FILE` dans `.env` ; Open WebUI configuré au démarrage par le service `open-webui-init` (`open-webui/configurer.py`), pgvector, passerelle nginx ; n8n optionnel via `docker-compose.n8n.yml`, ajouté à `COMPOSE_FILE`) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
 - `local/` : matériel formateur (guide, bundles Argos, labs originaux, script de correction du support). Exclu de git.
 
 ## Commandes
