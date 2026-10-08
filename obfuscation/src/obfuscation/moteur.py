@@ -84,19 +84,21 @@ class Moteur:
         recherche = self._recherche_jetons()
         if recherche is None:
             return []
-        return [
-            Remplacement(m.start(), m.end(), self.table.valeur(m.group(1)), m.group(1))
-            for m in recherche.finditer(texte)
-        ]
+        remplacements = []
+        for m in recherche.finditer(texte):
+            jeton = m.group(1).replace("\\", "")
+            remplacements.append(Remplacement(m.start(), m.end(), self.table.valeur(jeton), jeton))
+        return remplacements
 
     def _recherche_jetons(self) -> re.Pattern | None:
-        """Jetons connus, avec ou sans crochets, crochets échappés en Markdown compris."""
+        """Jetons connus, avec ou sans crochets, et tels que Markdown les reformate : crochets ou « _ » échappés
+        (\\[CLIENT\\_1\\]), italique (_CLIENT_1_). Un jeton ne doit pas être collé à une lettre, à un chiffre
+        ni à un « _ » lui-même collé à un mot (MY_CLIENT_1)."""
         if self._taille_table != len(self.table.jetons):
             nus = sorted((jeton[1:-1] for jeton in self.table.jetons), key=len, reverse=True)
+            alternatives = "|".join(re.escape(nu).replace("_", r"\\?_") for nu in nus)
             self._jetons_connus = (
-                re.compile(r"(?:\\?\[)?(?<!\w)(" + "|".join(map(re.escape, nus)) + r")(?!\w)(?:\\?\])?")
-                if nus
-                else None
+                re.compile(r"(?:\\?\[)?(?<![^\W_])(?<!\w_)(" + alternatives + r")(?![^\W_])(?!_\w)(?:\\?\])?") if nus else None
             )
             self._taille_table = len(self.table.jetons)
         return self._jetons_connus

@@ -58,3 +58,10 @@ def test_accents_decomposes(moteur):
 def test_termes_colles_a_un_souligne_ou_a_un_chiffre(moteur):
     texte = "Novaltis_Proposition_2026, Novaltis2026 et dossier_Novaltis"
     assert moteur.transformer(texte, "obfusquer") == "[CLIENT_1]_Proposition_2026, [CLIENT_1]2026 et dossier_[CLIENT_1]"
+
+
+def test_restauration_des_formes_markdown_avec_soulignes(moteur):
+    moteur.transformer("Novaltis", "obfusquer")
+    assert moteur.transformer("_CLIENT_1_ et CLIENT\\_1, mais pas MY_CLIENT_1", "restaurer") == (
+        "_Novaltis_ et Novaltis, mais pas MY_CLIENT_1"
+    )
