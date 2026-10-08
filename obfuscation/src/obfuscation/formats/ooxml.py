@@ -11,8 +11,8 @@ from . import Resultat
 from .xml_texte import transformer_xml
 
 EXTENSIONS_OOXML = {".docx", ".xlsx", ".pptx"}
-EXTENSIONS_XML = {".xml", ".rels", ".vml"}
-EXTENSIONS_IMAGES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".emf", ".wmf", ".svg"}
+EXTENSIONS_XML = {".xml", ".rels", ".vml", ".svg"}  # une image SVG est du XML et peut contenir du texte
+EXTENSIONS_IMAGES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".emf", ".wmf"}
 RELATIONS = "http://schemas.openxmlformats.org/package/2006/relationships"
 TYPES = "http://schemas.openxmlformats.org/package/2006/content-types"
 TYPE_MINIATURE = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"

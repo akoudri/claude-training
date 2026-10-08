@@ -50,3 +50,12 @@ def test_document_incorpore_binaire_et_image(dictionnaire):
 def test_xml_mal_forme_avec_references_de_caracteres(dictionnaire):
     document = zip_de({"xl/drawings/vmlDrawing1.vml": b"<xml><br>Projet H&#233;ron</xml>"})
     assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["xl/drawings/vmlDrawing1.vml : « Projet Héron »"]
+
+
+def test_accents_decomposes_detectes(dictionnaire):
+    assert Controle(dictionnaire, Table()).controler_texte("Projet Héron".encode()) == ["« Projet Héron »"]
+
+
+def test_image_svg_analysee(dictionnaire):
+    document = zip_de({"word/media/logo.svg": b'<svg xmlns="http://www.w3.org/2000/svg"><text>Novaltis</text></svg>'})
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["word/media/logo.svg : « Novaltis »"]

@@ -1,5 +1,6 @@
 """Dictionnaires YAML : catégories de termes sensibles et motifs propres au contexte."""
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -13,13 +14,18 @@ CLE_MOTIFS = "motifs"
 
 
 def normaliser(texte: str) -> str:
-    """Forme de comparaison : espaces réduites, casse ignorée."""
-    return " ".join(texte.split()).casefold()
+    """Forme de comparaison : accents composés (NFC), espaces réduites, casse ignorée."""
+    return unicodedata.normalize("NFC", " ".join(texte.split())).casefold()
 
 
 def motif_de_terme(terme: str) -> str:
-    """Regex d'un terme : toute suite d'espaces (insécables comprises) est acceptée entre ses mots."""
-    return r"\s+".join(re.escape(mot) for mot in terme.split())
+    """Regex d'un terme : toute suite d'espaces (insécables comprises) est acceptée entre ses mots.
+
+    Les accents peuvent être composés (« é ») ou décomposés (« e » + accent combinant, fréquent sous macOS).
+    """
+    formes = dict.fromkeys(unicodedata.normalize(forme, terme) for forme in ("NFC", "NFD"))
+    motifs = [r"\s+".join(re.escape(mot) for mot in forme.split()) for forme in formes]
+    return motifs[0] if len(motifs) == 1 else "(?:" + "|".join(motifs) + ")"
 
 
 @dataclass(frozen=True)

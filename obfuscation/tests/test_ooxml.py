@@ -118,3 +118,9 @@ def test_partie_racine_des_relations_traitee(moteur):
     )
     relations = zipfile.ZipFile(io.BytesIO(obfusquer(original, moteur).donnees)).read("_rels/.rels")
     assert b"novaltis" not in relations and b"thumbnail" not in relations
+
+
+def test_texte_des_images_svg_obfusque(moteur):
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg"><text>Novaltis</text></svg>'
+    resultat = zipfile.ZipFile(io.BytesIO(obfusquer(ajouter_partie(docx_exemple(), "word/media/logo.svg", svg), moteur).donnees))
+    assert b"[CLIENT_1]" in resultat.read("word/media/logo.svg")

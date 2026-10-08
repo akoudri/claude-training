@@ -48,3 +48,8 @@ def test_chevauchement_partiel_ne_laisse_rien_fuir(moteur):
     obfusque = moteur.transformer(texte, "obfusquer")
     assert obfusque == "Voir [URL_1] demain"
     assert moteur.transformer(obfusque, "restaurer") == texte
+
+
+def test_accents_decomposes(moteur):
+    # Forme NFD (« e » + accent combinant), fréquente dans les fichiers venus de macOS.
+    assert moteur.transformer("Le Projet Héron", "obfusquer") == "Le [PROJET_1]"
