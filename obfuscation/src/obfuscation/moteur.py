@@ -59,13 +59,23 @@ class Moteur:
                     candidats.append((m.start(), m.end(), 1, motif.categorie, m.group()))
         # Le plus long gagne ; à longueur égale, le dictionnaire prime, puis le plus à gauche.
         candidats.sort(key=lambda c: (c[0] - c[1], c[2], c[0]))
-        retenus: list[Remplacement] = []
+        retenus: list[tuple[int, int, str, str]] = []  # (debut, fin, catégorie, valeur), par priorité
         for debut, fin, _, categorie, valeur in candidats:
-            if any(debut < r.fin and r.debut < fin for r in retenus):
-                continue
+            chevauches = [r for r in retenus if debut < r[1] and r[0] < fin]
+            if not chevauches:
+                retenus.append((debut, fin, categorie, valeur))
+            elif not any(r[0] <= debut and fin <= r[1] for r in chevauches):
+                # Chevauchement partiel : écarter le candidat laisserait sa partie non couverte en clair.
+                # On fusionne sous la catégorie prioritaire ; la valeur est le texte exact, pour un aller-retour fidèle.
+                union_debut = min(debut, *(r[0] for r in chevauches))
+                union_fin = max(fin, *(r[1] for r in chevauches))
+                fusion = (union_debut, union_fin, chevauches[0][2], texte[union_debut:union_fin])
+                retenus = [fusion if r is chevauches[0] else r for r in retenus if r is chevauches[0] or r not in chevauches]
+        remplacements = []
+        for debut, fin, categorie, valeur in sorted(retenus):
             jeton = self.table.jeton_pour(categorie, valeur)
-            retenus.append(Remplacement(debut, fin, jeton, jeton[1:-1]))
-        return sorted(retenus, key=lambda r: r.debut)
+            remplacements.append(Remplacement(debut, fin, jeton, jeton[1:-1]))
+        return remplacements
 
     def _a_restaurer(self, texte: str) -> list[Remplacement]:
         for m in JETON_ENTRE_CROCHETS.finditer(texte):

@@ -40,3 +40,11 @@ def test_restauration_tolerante(moteur):
 def test_jetons_inconnus_signales(moteur):
     assert moteur.transformer("[CLIENT_9]", "restaurer") == "[CLIENT_9]"
     assert moteur.inconnus == {"[CLIENT_9]"}
+
+
+def test_chevauchement_partiel_ne_laisse_rien_fuir(moteur):
+    # L'URL, plus longue, s'arrête à l'espace et ne couvre que le début de « Jeanne Martin ».
+    texte = "Voir https://intranet.example/Jeanne Martin demain"
+    obfusque = moteur.transformer(texte, "obfusquer")
+    assert obfusque == "Voir [URL_1] demain"
+    assert moteur.transformer(obfusque, "restaurer") == texte
