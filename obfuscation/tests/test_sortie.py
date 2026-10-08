@@ -51,3 +51,16 @@ def test_refuse_d_ecraser(tmp_path):
     with pytest.raises(FileExistsError):
         ecrire(chemin, rendre([], ["CLIENT"], "m", []))
     assert chemin.read_text(encoding="utf-8") == "CLIENT:\n  - Novaltis\n"
+
+
+def test_un_saut_de_ligne_ne_sort_pas_des_commentaires(tmp_path):
+    # Un nom de fichier peut contenir un saut de ligne : il ne doit jamais injecter d'entrée dans le YAML.
+    candidat = Candidat("CLIENT", ["Novaltis"], 1, "contexte\nPROJET:\n  - Injecté", ["Nova\nPROJET:"])
+    contenu = rendre(
+        [candidat], ["CLIENT"], "modele\nPERSONNE:\n  - Injecté", ["piège\nLIEU:\n  - Injecté — morceau 1/1"]
+    )
+    chemin = tmp_path / "c.candidats.yaml"
+    ecrire(chemin, contenu)
+    dictionnaire = charger_dictionnaires([chemin])
+    assert dictionnaire.terme("Injecté") is None
+    assert all(ligne.startswith(("#", "CLIENT:", "  - ", "    # ")) for ligne in contenu.splitlines())

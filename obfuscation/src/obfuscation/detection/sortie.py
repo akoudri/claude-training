@@ -12,6 +12,12 @@ from .candidats import Candidat
 SIMPLE = re.compile(r"[^\W\d_][\w .'’&-]*")
 
 
+def _ligne(texte: str) -> str:
+    """Texte placé dans un commentaire : sur une seule ligne. Un saut de ligne (nom de fichier, contexte) sortirait
+    du commentaire et injecterait des entrées dans le dictionnaire."""
+    return " ".join(texte.split())
+
+
 def _scalaire(terme: str) -> str:
     return terme if SIMPLE.fullmatch(terme) else json.dumps(terme, ensure_ascii=False)
 
@@ -29,17 +35,17 @@ def _commentaire(candidat: Candidat) -> str:
     morceaux = [f"{candidat.occurrences} {_pluriel(candidat.occurrences, 'occurrence')}"]
     if candidat.presumees:
         n = len(candidat.presumees)
-        morceaux.append(f"{_pluriel(n, 'variante')} {_pluriel(n, 'présumée')}, à vérifier : {', '.join(candidat.presumees)}")
+        morceaux.append(f"{_pluriel(n, 'variante')} {_pluriel(n, 'présumée')}, à vérifier : {_ligne(', '.join(candidat.presumees))}")
     if candidat.autres_categories:
-        morceaux.append(f"aussi proposé en {', '.join(candidat.autres_categories)}")
+        morceaux.append(f"aussi proposé en {_ligne(', '.join(candidat.autres_categories))}")
     return " ; ".join(morceaux)
 
 
 def rendre(candidats: list[Candidat], categories: list[str], modele: str, ignores: list[str], jour: date | None = None) -> str:
     lignes = [
-        f"# Dictionnaire candidat produit par « detecter » le {(jour or date.today()).isoformat()} (modèle {modele}).",
+        f"# Dictionnaire candidat produit par « detecter » le {(jour or date.today()).isoformat()} (modèle {_ligne(modele)}).",
         "# À relire : supprimer les lignes refusées, corriger les catégories. Rien n'est appliqué sans « obfusquer ».",
-        f"# Morceaux non analysés : {', '.join(ignores) if ignores else 'aucun'}.",
+        f"# Morceaux non analysés : {_ligne(', '.join(ignores)) if ignores else 'aucun'}.",
     ]
     for categorie in categories:
         retenus = [c for c in candidats if c.categorie == categorie]
@@ -50,7 +56,7 @@ def rendre(candidats: list[Candidat], categories: list[str], modele: str, ignore
         for candidat in retenus:
             lignes.append(f"  - {_entree(candidat)}  # {_commentaire(candidat)}")
             if candidat.contexte:
-                lignes.append(f"    # « {candidat.contexte} »")
+                lignes.append(f"    # « {_ligne(candidat.contexte)} »")
     return "\n".join(lignes) + "\n"
 
 
