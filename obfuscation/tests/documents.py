@@ -1,4 +1,7 @@
 """Fabrique des documents de test : aucun binaire n'est versionné."""
+import io
+import zipfile
+
 import pymupdf
 
 DICO = r"""
@@ -20,3 +23,11 @@ def pdf_exemple(html: str | None = None) -> bytes:
     if html:
         page.insert_htmlbox(pymupdf.Rect(50, 50, 550, 800), html)
     return document.tobytes()
+
+
+def zip_de(parties: dict[str, bytes]) -> bytes:
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as archive:
+        for nom, contenu in parties.items():
+            archive.writestr(nom, contenu)
+    return tampon.getvalue()
