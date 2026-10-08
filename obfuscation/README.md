@@ -37,6 +37,48 @@ uv run restaurer - -t ~/.obfuscation/mon-client.table.json < reponse.txt
   `_CLIENT_1_`, `CLIENT\_1`, ou `CLIENT_1` sans crochets.
 - Codes de retour : `0` succès, `1` au moins un fichier en erreur ou non conforme, `2` erreur de configuration.
 
+## Détecter les termes avec un LLM local
+
+Le dictionnaire ne masque que ce qu'il contient. `detecter` aide à le constituer : un LLM servi par Ollama lit les
+documents bruts **en local** et propose les noms de clients, prestataires, projets, personnes et lieux qu'il repère.
+Rien ne quitte la machine.
+
+```bash
+# Ollama doit tourner : celui de la stack local-llm (cd ../local-llm && docker compose up -d ollama),
+# ou un Ollama natif (plus rapide sous macOS, où Docker n'a pas accès au GPU).
+uv run detecter documents/ -o mon-client.candidats.yaml -d mon-client.yaml
+# Relire mon-client.candidats.yaml : supprimer les lignes refusées, corriger les catégories. Puis :
+uv run obfusquer documents/ -d mon-client.yaml -d mon-client.candidats.yaml -t ~/.obfuscation/mon-client.table.json -o sortie/
+```
+
+- Le résultat est un dictionnaire au format habituel, commenté (nombre d'occurrences, extrait de contexte) :
+
+  ```yaml
+  CLIENT:
+    - [Acme Défense, Acme Defense, Acme]  # 14 occurrences ; variante présumée, à vérifier : Acme
+      # « …le marché passé par Acme Défense pour… »
+  ```
+
+- Les termes des dictionnaires passés avec `-d` ne sont pas reproposés. Le fichier `-o` n'est jamais écrasé.
+- Un terme que le modèle invente ou déforme est rejeté : seul ce qui figure dans le texte est proposé, sous la forme
+  du texte. Un terme contenu dans un autre (`Acme` dans `Acme Défense`) est proposé comme variante présumée.
+- Options : `--modele` (défaut `granite4.2:8b`), `--ollama-url` (défaut `http://127.0.0.1:11434`),
+  `--categories` (défaut `CLIENT,PRESTATAIRE,PROJET,PERSONNE,LIEU`), `--delai` (secondes par appel, défaut 300).
+- Codes de retour : `0` succès, `1` résultat incomplet (fichier illisible ou morceau non analysé, listé en tête du
+  fichier), `2` erreur de configuration (Ollama injoignable, modèle absent, fichier `-o` existant).
+- Les fichiers `*.candidats.yaml` contiennent des termes réels : ils sont exclus de git.
+
+**Mesurer la détection** : `exemples/mesurer.py` compare le résultat à un dictionnaire validé (rappel : part des
+termes retrouvés ; précision : part des propositions justes). Il n'affiche que des chiffres, jamais un terme ni un
+nom de fichier.
+
+```bash
+uv run python exemples/generer.py && uv run python exemples/mesurer.py      # corpus fictif Héron
+uv run python exemples/mesurer.py documents/ --reference mon-client.yaml    # documents réels
+```
+
+Le corpus Héron ne compte que quatre entités : la mesure y est indicative.
+
 ## Dictionnaires
 
 ```yaml
@@ -84,7 +126,8 @@ les emplacements sont listés et la commande renvoie `1` : ne pas l'envoyer.
   quand même les termes.
 - Pas d'**OCR** : un PDF scanné, sans couche texte, est refusé.
 - Formats anciens (`.doc`, `.xls`, `.ppt`) non pris en charge : les enregistrer d'abord au format actuel.
-- Le dictionnaire ne trouve que ce qu'il contient : relire les documents obfusqués avant de les envoyer.
+- Le dictionnaire ne trouve que ce qu'il contient, et `detecter` peut oublier des termes (surtout avec un petit
+  modèle) : relire le candidat, puis les documents obfusqués avant de les envoyer.
 - **Licence** : la conversion PDF repose sur PyMuPDF, sous licence AGPL. Usage interne sans contrainte ; à
   vérifier avant toute redistribution de l'outil.
 
@@ -131,4 +174,5 @@ uv run pytest
 ```
 
 Les documents de test sont fabriqués par `tests/documents.py` : aucun fichier binaire n'est versionné.
-Conception : `docs/specs/2026-10-08-obfuscation-design.md` ; plan : `docs/plans/2026-10-08-obfuscation.md`.
+Conception : `docs/specs/2026-10-08-obfuscation-design.md`, `docs/specs/2026-10-08-detection-design.md` ;
+plans : `docs/plans/2026-10-08-obfuscation.md`, `docs/plans/2026-10-08-detection.md`.

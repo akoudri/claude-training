@@ -47,3 +47,4 @@ obfuscation/sortie/
 obfuscation/restaure/
 obfuscation/exemples/generes/
 *.table.json
+*.candidats.yaml
