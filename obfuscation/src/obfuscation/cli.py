@@ -98,8 +98,11 @@ def _traiter(chemins: list[Path], sortie: Path, moteur: Moteur, sens: Sens, exte
             # La table est enregistrée avant le document : une interruption ne laisse aucun jeton orphelin.
             moteur.table.sauvegarder(table)
             fuites = _fuites(resultat, extension, cible.relative_to(sortie), moteur)
+            non_conforme = cible.with_name(PREFIXE_NON_CONFORME + cible.name)
+            # Une version d'une exécution précédente ne doit pas rester à côté (surtout une version sans préfixe).
+            (cible if fuites else non_conforme).unlink(missing_ok=True)
             if fuites:
-                cible = cible.with_name(PREFIXE_NON_CONFORME + cible.name)
+                cible = non_conforme
                 code = ECHEC_FICHIERS
                 for fuite in fuites:
                     _signaler("erreur", f"{cible} : terme sensible restant, {fuite}")

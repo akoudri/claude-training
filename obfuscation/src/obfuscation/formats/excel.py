@@ -12,6 +12,8 @@ C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 FORMULES = {f"{{{X}}}f", f"{{{C}}}f", f"{{{X}}}definedName"}
 EN_TETES = {f"{{{X}}}{nom}" for nom in ("oddHeader", "oddFooter", "evenHeader", "evenFooter", "firstHeader", "firstFooter")}
 FEUILLE = f"{{{X}}}sheet"
+SOURCE_CROISE = f"{{{X}}}worksheetSource"
+CATEGORIE_FEUILLE = "FEUILLE"
 CELLULE = f"{{{X}}}c"
 VALEUR = f"{{{X}}}v"
 VALEUR_GRAPHIQUE = f"{{{C}}}v"
@@ -28,7 +30,11 @@ LONGUEUR_MAX_FEUILLE = 31
 def nom_de_feuille(nom: str, moteur: Moteur, sens: Sens) -> str:
     """Les crochets sont interdits dans un nom de feuille : on y écrit le jeton nu (CLIENT_1)."""
     if sens == "obfusquer":
-        return appliquer(nom, [replace(r, texte=r.jeton) for r in moteur.remplacements(nom, sens)])
+        obfusque = appliquer(nom, [replace(r, texte=r.jeton) for r in moteur.remplacements(nom, sens)])
+        if len(obfusque) > LONGUEUR_MAX_FEUILLE:
+            # Trop long pour Excel : le nom entier devient un seul jeton, qui le restaurera tel quel.
+            return moteur.table.jeton_pour(CATEGORIE_FEUILLE, nom)[1:-1]
+        return obfusque
     restaure = moteur.transformer(nom, sens)
     if not restaure or len(restaure) > LONGUEUR_MAX_FEUILLE or CARACTERES_INTERDITS_FEUILLE & set(restaure):
         moteur.avertissements.append(f"nom de feuille « {nom} » laissé tel quel : « {restaure} » n'est pas un nom de feuille valide")
@@ -36,12 +42,14 @@ def nom_de_feuille(nom: str, moteur: Moteur, sens: Sens) -> str:
     return restaure
 
 
-def traiter_nom_de_feuille(element: etree._Element, moteur: Moteur, sens: Sens) -> bool:
-    nom = element.get("name", "")
+def traiter_nom_de_feuille(element: etree._Element, moteur: Moteur, sens: Sens, attribut: str = "name") -> bool:
+    nom = element.get(attribut)
+    if nom is None:
+        return False
     nouveau = nom_de_feuille(nom, moteur, sens)
     if nouveau == nom:
         return False
-    element.set("name", nouveau)
+    element.set(attribut, nouveau)
     return True
 
 

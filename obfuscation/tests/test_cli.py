@@ -131,3 +131,17 @@ def test_nom_de_fichier_controle(espace, monkeypatch, capsys):
     assert obfusquer(espace) == 1
     assert (espace / "sortie" / "NON-CONFORME_Proposition Novaltis.docx").exists()
     assert "nom du fichier : « Novaltis »" in capsys.readouterr().err
+
+
+def test_aucune_version_perimee_ne_subsiste(espace):
+    assert obfusquer(espace) == 0
+    assert (espace / "sortie" / "note.md").exists()
+    # Le document change et fuit désormais : la version conforme précédente ne doit pas rester à côté.
+    (espace / "docs" / "note.md").write_text("Nova\u00adltis\n", encoding="utf-8")
+    assert obfusquer(espace) == 1
+    assert not (espace / "sortie" / "note.md").exists()
+    assert (espace / "sortie" / "NON-CONFORME_note.md").exists()
+    # Corrigé : la version non conforme disparaît à son tour.
+    (espace / "docs" / "note.md").write_text("rien\n", encoding="utf-8")
+    assert obfusquer(espace) == 0
+    assert not (espace / "sortie" / "NON-CONFORME_note.md").exists()

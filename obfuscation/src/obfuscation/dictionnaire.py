@@ -13,18 +13,34 @@ CATEGORIE = re.compile(r"[A-Z][A-Z0-9_]*")
 CLE_MOTIFS = "motifs"
 
 
+# Un terme est délimité par tout ce qui n'est pas une lettre : « Novaltis_2026 », « dossier_Novaltis » ou
+# « Novaltis2026 » le contiennent, mais pas « Novaltisien ».
+AVANT = r"(?<![^\W\d_])"
+APRES = r"(?![^\W\d_])"
+# Word remplace « ' » par « ’ » et peut insérer des tirets insécables : ces variantes sont équivalentes.
+APOSTROPHES = "'’‘ʼ"
+TIRETS = "-‐‑‒–"
+EQUIVALENTS = {c: f"[{APOSTROPHES}]" for c in APOSTROPHES} | {c: f"[{re.escape(TIRETS)}]" for c in TIRETS}
+VERS_ASCII = str.maketrans({**{c: "'" for c in APOSTROPHES}, **{c: "-" for c in TIRETS}})
+
+
 def normaliser(texte: str) -> str:
-    """Forme de comparaison : accents composés (NFC), espaces réduites, casse ignorée."""
-    return unicodedata.normalize("NFC", " ".join(texte.split())).casefold()
+    """Forme de comparaison : accents composés (NFC), apostrophes et tirets ASCII, espaces réduites, casse ignorée."""
+    return unicodedata.normalize("NFC", " ".join(texte.split())).translate(VERS_ASCII).casefold()
+
+
+def _motif_de_mot(mot: str) -> str:
+    return "".join(EQUIVALENTS.get(c) or re.escape(c) for c in mot)
 
 
 def motif_de_terme(terme: str) -> str:
     """Regex d'un terme : toute suite d'espaces (insécables comprises) est acceptée entre ses mots.
 
-    Les accents peuvent être composés (« é ») ou décomposés (« e » + accent combinant, fréquent sous macOS).
+    Les accents peuvent être composés (« é ») ou décomposés (« e » + accent combinant, fréquent sous macOS) ;
+    apostrophes et tirets typographiques valent leur forme ASCII.
     """
     formes = dict.fromkeys(unicodedata.normalize(forme, terme) for forme in ("NFC", "NFD"))
-    motifs = [r"\s+".join(re.escape(mot) for mot in forme.split()) for forme in formes]
+    motifs = [r"\s+".join(_motif_de_mot(mot) for mot in forme.split()) for forme in formes]
     return motifs[0] if len(motifs) == 1 else "(?:" + "|".join(motifs) + ")"
 
 
@@ -59,7 +75,7 @@ class Dictionnaire:
         if not self.variantes:
             return None
         alternatives = "|".join(motif_de_terme(v) for v in sorted(self.variantes, key=len, reverse=True))
-        return re.compile(rf"(?=(?<!\w)({alternatives})(?!\w))", re.IGNORECASE)
+        return re.compile(rf"(?={AVANT}({alternatives}){APRES})", re.IGNORECASE)
 
 
 def charger_dictionnaires(chemins: list[Path]) -> Dictionnaire:

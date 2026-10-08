@@ -49,7 +49,8 @@ motifs:                            # facultatif : expressions régulières propr
 
 - Catégories en majuscules (`A-Z`, chiffres, `_`). Un même terme ne peut pas figurer dans deux catégories.
 - La recherche ignore la casse, accepte n'importe quelles espaces entre les mots, reconnaît les accents composés
-  comme décomposés, et ne retient que des mots entiers (`NVL` ne touche pas `NVLX`).
+  comme décomposés et les apostrophes ou tirets typographiques (`L’Oréal` pour `L'Oréal`). Un terme est délimité
+  par tout ce qui n'est pas une lettre : `Novaltis_2026` et `dossier_Novaltis` sont reconnus, `NVLX` ne l'est pas.
 - Quand deux correspondances se chevauchent, la plus longue l'emporte ; si elles ne se recouvrent qu'en partie,
   elles sont fusionnées sous un seul jeton pour que rien ne reste en clair.
 

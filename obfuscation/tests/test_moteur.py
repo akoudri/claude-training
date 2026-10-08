@@ -53,3 +53,8 @@ def test_chevauchement_partiel_ne_laisse_rien_fuir(moteur):
 def test_accents_decomposes(moteur):
     # Forme NFD (« e » + accent combinant), fréquente dans les fichiers venus de macOS.
     assert moteur.transformer("Le Projet Héron", "obfusquer") == "Le [PROJET_1]"
+
+
+def test_termes_colles_a_un_souligne_ou_a_un_chiffre(moteur):
+    texte = "Novaltis_Proposition_2026, Novaltis2026 et dossier_Novaltis"
+    assert moteur.transformer(texte, "obfusquer") == "[CLIENT_1]_Proposition_2026, [CLIENT_1]2026 et dossier_[CLIENT_1]"

@@ -54,8 +54,11 @@ motifs:                            # facultatif : regex propres au contexte
 ```
 
 - Catégorie : majuscules, chiffres et `_` (`^[A-Z][A-Z0-9_]*$`). `motifs` est réservé.
-- Correspondance insensible à la casse, sur mots entiers (`(?<!\w)` … `(?!\w)`, pour accepter des termes finissant
-  par un point comme `J. Dupont`). Les accents ne sont pas normalisés : déclarer les variantes sans accent.
+- Correspondance insensible à la casse, délimitée par tout ce qui n'est pas une lettre (`(?<![^\W\d_])` …
+  `(?![^\W\d_])`) : `J. Dupont` (terme finissant par un point), `Novaltis_2026`, `dossier_Novaltis` et `Novaltis2026`
+  sont reconnus, `Novaltisien` ne l'est pas. Apostrophes et tirets typographiques (`’`, tiret insécable…) valent leur
+  forme ASCII ; accents composés et décomposés (NFC/NFD) sont équivalents. Un « e » sans accent reste distinct d'un
+  « é » : déclarer les variantes sans accent.
 - En cas de chevauchement, la correspondance la plus longue gagne, quelle que soit sa source ; à longueur égale,
   le dictionnaire prime sur les motifs. Ainsi `jeanne.martin@novaltis.example` devient `[EMAIL_1]` et non
   `jeanne.martin@[CLIENT_1].example`, qui laisserait fuir le nom.

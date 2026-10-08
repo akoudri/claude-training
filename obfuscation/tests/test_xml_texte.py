@@ -164,3 +164,32 @@ def test_instructions_de_champ_et_alias(moteur):
     )
     assert next(racine.iter(f"{{{W}}}fldSimple")).get(f"{{{W}}}instr") == 'HYPERLINK "[URL_1]"'
     assert next(racine.iter(f"{{{W}}}alias")).get(f"{{{W}}}val") == "Contrat [CLIENT_1]"
+
+
+def test_tabulation_dans_un_terme(moteur):
+    racine = transformer(
+        f'<w:document xmlns:w="{W}"><w:p><w:r><w:t>Jeanne</w:t><w:tab/><w:t>Martin signe</w:t></w:r></w:p></w:document>',
+        moteur,
+    )
+    assert textes(racine, W, "t") == ["[PERSONNE_1]", " signe"]
+    assert next(racine.iter(f"{{{W}}}tab"), None) is None
+
+
+def test_tableaux_et_tableaux_croises_excel(moteur):
+    racine = transformer(
+        f'<r xmlns="{X}"><tableColumn id="1" name="Budget Novaltis"/><worksheetSource ref="A1:B3" sheet="Novaltis"/>'
+        f'<cacheField name="Client Novaltis"><sharedItems><s v="Novaltis SA"/></sharedItems></cacheField></r>',
+        moteur,
+    )
+    assert next(racine.iter(f"{{{X}}}tableColumn")).get("name") == "Budget [CLIENT_1]"
+    assert next(racine.iter(f"{{{X}}}worksheetSource")).get("sheet") == "CLIENT_1"
+    assert next(racine.iter(f"{{{X}}}cacheField")).get("name") == "Client [CLIENT_1]"
+    assert next(racine.iter(f"{{{X}}}s")).get("v") == "[CLIENT_1]"
+
+
+def test_nom_de_feuille_trop_long_remplace_entierement(moteur):
+    nom = "Budget de J. Martin 2026–2030 v"  # 31 caractères, le maximum d'Excel ; PERSONNE_1 l'allonge
+    racine = transformer(f'<workbook xmlns="{X}"><sheets><sheet name="{nom}"/></sheets><f>\'{nom}\'!A1</f></workbook>', moteur)
+    feuille = next(racine.iter(f"{{{X}}}sheet")).get("name")
+    assert feuille == "FEUILLE_1" and textes(racine, X, "f") == ["'FEUILLE_1'!A1"]
+    assert moteur.transformer(feuille, "restaurer") == nom

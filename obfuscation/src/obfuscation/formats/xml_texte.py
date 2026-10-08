@@ -23,12 +23,20 @@ UNITES = {
     _q(X, "is"): (_q(X, "t"),),
     _q(X, "text"): (_q(X, "t"),),
 }
+# Éléments Word sans texte qui valent un caractère : ils participent à la recherche et disparaissent
+# s'ils tombent à l'intérieur d'un terme remplacé.
+LITTERAUX = {_q(W, "tab"): "\t", _q(W, "br"): "\n", _q(W, "cr"): "\n", _q(W, "noBreakHyphen"): "-", _q(W, "softHyphen"): ""}
+UNITES[_q(W, "p")] += tuple(LITTERAUX)
 SEGMENTS = {tag for tags in UNITES.values() for tag in tags}
+RUN = _q(W, "r")
 PRESERVER_ESPACES = {_q(W, "t"), _q(W, "delText"), _q(X, "t")}
 # Attributs lisibles : relecteurs, textes de remplacement des images, info-bulles, instructions de champs…
 ATTRIBUTS = {"author", "initials", "descr", "title", "tooltip", "userName", "instr"}
 ATTRIBUTS_PAR_ELEMENT = {
     ("alias", "val"),
+    ("tableColumn", "name"),
+    ("cacheField", "name"),
+    ("s", "v"),
     ("cNvPr", "name"),
     ("docPr", "name"),
     ("person", "displayName"),
@@ -41,7 +49,7 @@ def transformer_xml(racine: etree._Element, moteur: Moteur, sens: Sens) -> bool:
     """Applique le moteur à une partie ; renvoie vrai si elle a changé."""
     modifie = False
     for unite in racine.iter(*UNITES):
-        segments = [s for s in unite.iter(*UNITES[unite.tag]) if _unite(s) is unite]
+        segments = [s for s in unite.iter(*UNITES[unite.tag]) if _unite(s) is unite and _segment(s)]
         modifie |= _traiter_segments(segments, moteur, sens)
     # Liste figée : traiter_cellule_numerique modifie l'arbre pendant le parcours.
     for element in list(racine.iter(tag=etree.Element)):
@@ -64,12 +72,21 @@ def _unite(element: etree._Element) -> etree._Element | None:
     return next(element.iterancestors(*UNITES), None)
 
 
+def _segment(element: etree._Element) -> bool:
+    """Un élément littéral (tabulation…) ne compte que dans le texte courant, pas dans les taquets de tabulation."""
+    return element.tag not in LITTERAUX or element.getparent().tag == RUN
+
+
 def _traiter_segments(segments: list[etree._Element], moteur: Moteur, sens: Sens) -> bool:
-    textes = [s.text or "" for s in segments]
+    textes = [LITTERAUX[s.tag] if s.tag in LITTERAUX else s.text or "" for s in segments]
     remplacements = moteur.remplacements("".join(textes), sens)
     if not remplacements:
         return False
-    for segment, texte in zip(segments, reecrire(textes, remplacements)):
+    for segment, ancien, texte in zip(segments, textes, reecrire(textes, remplacements)):
+        if segment.tag in LITTERAUX:
+            if texte != ancien:  # absorbé par un remplacement
+                segment.getparent().remove(segment)
+            continue
         segment.text = texte
         if segment.tag in PRESERVER_ESPACES and texte != texte.strip():
             segment.set(XML_SPACE, "preserve")
@@ -97,4 +114,6 @@ def _traiter_attributs(element: etree._Element, moteur: Moteur, sens: Sens) -> b
                 modifie = True
     if element.tag == excel.FEUILLE:
         modifie |= excel.traiter_nom_de_feuille(element, moteur, sens)
+    elif element.tag == excel.SOURCE_CROISE:
+        modifie |= excel.traiter_nom_de_feuille(element, moteur, sens, "sheet")
     return modifie

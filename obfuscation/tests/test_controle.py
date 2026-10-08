@@ -117,3 +117,36 @@ def test_nombre_sensible_hors_cellule_detecte(dictionnaire):
     # Seules les valeurs de cellules et de graphiques (« v ») sont dispensées de la recherche des motifs.
     document = zip_de({"docProps/custom.xml": b"<p><n>12345678200010</n><v>123456782</v></p>"})
     assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["docProps/custom.xml : « 12345678200010 »"]
+
+
+def test_commentaires_et_instructions_xml_controles(dictionnaire):
+    document = zip_de({"word/document.xml": b"<d><!-- Novaltis --><?client paul@acme.example?><p/></d>"})
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == [
+        "word/document.xml : « Novaltis »",
+        "word/document.xml : « paul@acme.example »",
+    ]
+
+
+def test_motifs_dans_le_xml_mal_forme_et_motifs_personnalises_dans_les_attributs(dictionnaire):
+    document = zip_de({
+        "xl/drawings/vmlDrawing1.vml": b"<xml><br>paul@autre.example</xml>",
+        "word/document.xml": f'<w:d xmlns:w="{W}"><w:tag w:val="CTR-123456"/></w:d>'.encode(),
+    })
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == [
+        "xl/drawings/vmlDrawing1.vml : « paul@autre.example »",
+        "word/document.xml : « CTR-123456 »",
+    ]
+
+
+def test_tabulations_et_cesures_invisibles(dictionnaire):
+    document = zip_de({
+        "word/document.xml": f'<w:d xmlns:w="{W}"><w:p><w:r><w:t>Jeanne</w:t><w:tab/><w:t>Martin</w:t></w:r></w:p></w:d>'.encode()
+    })
+    controle = Controle(dictionnaire, Table())
+    assert controle.controler_ooxml(document) == ["word/document.xml : « Jeanne\tMartin »"]
+    assert controle.controler_texte("Nova­ltis".encode()) == ["« Novaltis »"]
+
+
+def test_objet_ole_en_cp1252(dictionnaire):
+    document = zip_de({"word/embeddings/oleObject1.bin": b"\x00\x00" + "Projet Héron".encode("cp1252") + b"\x00"})
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["word/embeddings/oleObject1.bin : « Projet Héron »"]

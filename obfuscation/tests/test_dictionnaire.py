@@ -87,3 +87,11 @@ def test_variante_retrouvee_malgre_les_ecarts_de_casse_unicode(tmp_path):
     dictionnaire = charger_dictionnaires([ecrire(tmp_path, "CLIENT:\n  - Istanbul Conseil\n")])
     trouve = next(dictionnaire.recherche.finditer("chez İstanbul Conseil")).group(1)
     assert dictionnaire.terme(trouve) == Terme("CLIENT", "Istanbul Conseil")
+
+
+def test_apostrophes_et_tirets_typographiques(tmp_path):
+    # Word remplace « ' » par « ’ » et peut insérer des tirets insécables.
+    dictionnaire = charger_dictionnaires([ecrire(tmp_path, "CLIENT:\n  - L'Oréal\nPERSONNE:\n  - Jean-Pierre Durand\n")])
+    texte = "chez L’Oréal avec Jean‑Pierre Durand"
+    assert [m.group(1) for m in dictionnaire.recherche.finditer(texte)] == ["L’Oréal", "Jean‑Pierre Durand"]
+    assert dictionnaire.terme("L’Oréal") == Terme("CLIENT", "L'Oréal")
