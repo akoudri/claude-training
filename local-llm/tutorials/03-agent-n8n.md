@@ -11,7 +11,7 @@ Ce tutoriel décrit le démonstrateur n8n de ce dépôt : il compare un **docume
 
 | Élément | Détail |
 |---|---|
-| Stack | Démarrée et configurée comme au [tutoriel 01](01-configuration-open-webui.md#2-premier-démarrage), section 2. |
+| Stack | Démarrée et configurée comme au [tutoriel 01](01-configuration-open-webui.md#2-premier-démarrage), section 2, **avec n8n** : `COMPOSE_FILE` doit inclure `docker-compose.n8n.yml` dans `.env` (section 3.1). |
 | Node.js 22 ou plus récent, sur l'hôte | Pour les tests, `build.mjs` et `deploy.sh` (`node --version`). Aucune dépendance npm à installer. |
 | Bash | Pour `deploy.sh` : Linux, macOS, ou WSL2 sous Windows. |
 | Un compte SMTP pour l'envoi des mails | Le tutoriel utilise Gmail (section 3.2). Tout autre serveur SMTP convient : seul le nom de l'identifiant dans n8n est imposé. |
@@ -123,11 +123,16 @@ Les règles du `.gitignore` correspondantes : `documents/*`, `reports/*` et `n8n
 
 ### 3.1 Démarrer la stack
 
+n8n est un service optionnel, défini dans `docker-compose.n8n.yml`. Dans `.env`, la ligne `COMPOSE_FILE` doit se terminer par `:docker-compose.n8n.yml`, par exemple `COMPOSE_FILE=docker-compose.yml:docker-compose.vulkan.yml:docker-compose.n8n.yml` avec le profil Vulkan, ou `COMPOSE_FILE=docker-compose.yml:docker-compose.n8n.yml` sur le CPU (voir `.env.example`).
+
 ```bash
-cp .env.example .env     # puis éditer les secrets et le profil matériel (tutoriel 01, section 2)
+cp .env.example .env     # puis éditer les secrets et COMPOSE_FILE (tutoriel 01, section 2)
 docker compose up -d
+docker compose ps n8n                  # le service doit être "running"
 docker compose exec ollama ollama ps   # après un premier appel : "100% GPU" avec un profil GPU
 ```
+
+Si `docker compose ps n8n` répond `no such service: n8n`, `docker-compose.n8n.yml` n'est pas dans `COMPOSE_FILE`.
 
 Ouvrir http://localhost:5678 et créer le compte propriétaire.
 

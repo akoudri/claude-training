@@ -1,6 +1,6 @@
 # Configurer Open WebUI pour un LLM local
 
-Ce tutoriel décrit la configuration d'Open WebUI appliquée à la stack `docker-compose.yml` de ce dépôt (Ollama + Open WebUI + Postgres/pgvector + n8n), et explique **pourquoi** chaque réglage compte sur une machine sans gros GPU dédié.
+Ce tutoriel décrit la configuration d'Open WebUI appliquée à la stack `docker-compose.yml` de ce dépôt (Ollama + Open WebUI + Postgres/pgvector, et n8n en option), et explique **pourquoi** chaque réglage compte sur une machine sans gros GPU dédié.
 
 - **Machines** : toute machine avec Docker (Linux, macOS, Windows avec WSL2). Ollama tourne sur le CPU, ou sur un GPU AMD, Intel ou NVIDIA selon le profil choisi (section 2).
 - **Configuration de référence** : les durées et débits cités ont été mesurés sur un Ryzen 7 7840HS avec iGPU Radeon 780M (profil `vulkan`) et 30 Go de RAM. Sur une autre machine, les **ordres de grandeur** changent, pas les réglages : la section 2 explique comment mesurer les vôtres.
@@ -59,6 +59,8 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
    | Linux avec GPU AMD ou Intel (intégré ou dédié) | `COMPOSE_FILE=docker-compose.yml:docker-compose.vulkan.yml` | Reporter dans `RENDER_GID` et `VIDEO_GID` les numéros donnés par `getent group render video`. |
    | Linux ou Windows (WSL2) avec GPU NVIDIA | `COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml` | Le pilote NVIDIA et le *NVIDIA Container Toolkit* doivent être installés (ils sont inclus dans Docker Desktop sous Windows). Sous Windows hors WSL, séparer les fichiers par `;`. |
    | macOS, ou machine sans GPU utilisable | aucune | Ollama tourne sur le CPU. Docker n'a pas accès au GPU d'un Mac. |
+
+   **n8n est optionnel** : il n'est utile qu'à l'agent du [tutoriel 03](03-agent-n8n.md). Pour l'inclure, ajouter `:docker-compose.n8n.yml` à la fin de la ligne `COMPOSE_FILE`, ou décommenter la ligne « + n8n » qui correspond à la machine (sans profil GPU : `COMPOSE_FILE=docker-compose.yml:docker-compose.n8n.yml`). Il peut aussi être ajouté plus tard : un nouveau `docker compose up -d` le démarre.
 
    Ajuster ensuite la mémoire :
 

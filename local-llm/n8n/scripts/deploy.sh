@@ -5,6 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+if ! docker compose config --services | grep -qx n8n; then
+  echo "Service n8n absent : ajouter docker-compose.n8n.yml à COMPOSE_FILE dans .env (voir .env.example)." >&2
+  exit 1
+fi
+
 CREDS_FILE=n8n/config/credentials.local.json # exclu de git (n8n/config/*)
 docker compose exec -T postgres sh -c \
   'psql -U "$POSTGRES_USER" -d n8n -At -F "|" -c "SELECT name, id FROM credentials_entity"' \
