@@ -1,13 +1,13 @@
 """Contrôle résiduel : relit un fichier produit et y cherche tout terme sensible, sans passer par les règles de format."""
+import html
 import io
 import re
 import zipfile
-from pathlib import PurePosixPath
 
 from lxml import etree
 
 from .dictionnaire import Dictionnaire, motif_de_terme
-from .formats.ooxml import EXTENSIONS_IMAGES, EXTENSIONS_OOXML, lire_xml
+from .formats.ooxml import EXTENSIONS_IMAGES, EXTENSIONS_OOXML, extension, lire_xml
 from .table import Table
 
 
@@ -33,10 +33,10 @@ class Controle:
             for info in archive.infolist():
                 contenu = archive.read(info)
                 partie = prefixe + info.filename
-                extension = PurePosixPath(info.filename).suffix.lower()
-                if extension in EXTENSIONS_OOXML:
+                type_partie = extension(info.filename)
+                if type_partie in EXTENSIONS_OOXML:
                     fuites += self.controler_ooxml(contenu, f"{partie} › ")
-                elif extension not in EXTENSIONS_IMAGES:
+                elif type_partie not in EXTENSIONS_IMAGES:
                     fuites += [f"{partie} : « {terme} »" for terme in sorted(self._chercher_partie(contenu))]
         return fuites
 
@@ -44,8 +44,9 @@ class Controle:
         try:
             racine = lire_xml(contenu)
         except (etree.XMLSyntaxError, ValueError):
-            # Partie binaire ou XML mal formé : recherche brute, en UTF-8 et en UTF-16 (objets OLE).
-            return self.chercher(contenu.decode("utf-8", errors="replace")) | self.chercher(
+            # Partie binaire ou XML mal formé : recherche brute, en UTF-8 et en UTF-16 (objets OLE),
+            # références de caractères (&#233;) décodées.
+            return self.chercher(html.unescape(contenu.decode("utf-8", errors="replace"))) | self.chercher(
                 contenu.decode("utf-16-le", errors="replace")
             )
         elements = list(racine.iter(tag=etree.Element))

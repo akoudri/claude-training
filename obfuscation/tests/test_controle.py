@@ -45,3 +45,8 @@ def test_document_incorpore_binaire_et_image(dictionnaire):
         "word/embeddings/Classeur.xlsx › xl/sharedStrings.xml : « Héron »",
         "word/embeddings/oleObject1.bin : « Novaltis »",
     ]
+
+
+def test_xml_mal_forme_avec_references_de_caracteres(dictionnaire):
+    document = zip_de({"xl/drawings/vmlDrawing1.vml": b"<xml><br>Projet H&#233;ron</xml>"})
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["xl/drawings/vmlDrawing1.vml : « Projet Héron »"]
