@@ -8,14 +8,12 @@ from .controle import Controle
 from .dictionnaire import Dictionnaire, charger_dictionnaires
 from .erreurs import ErreurConfiguration, ErreurFichier, ErreurTable
 from .formats import Resultat
-from .formats.ooxml import EXTENSIONS_OOXML, transformer_ooxml
-from .formats.pdf import pdf_vers_markdown
-from .formats.texte import transformer_texte
+from .formats.fichier import EXTENSIONS_LISIBLES, EXTENSIONS_TEXTE, transformer_fichier
+from .formats.ooxml import EXTENSIONS_OOXML
 from .moteur import Moteur, Sens
 from .table import Table
 
 SUCCES, ECHEC_FICHIERS, ECHEC_CONFIGURATION = 0, 1, 2
-EXTENSIONS_TEXTE = {".md", ".txt"}
 PREFIXE_NON_CONFORME = "NON-CONFORME_"
 
 
@@ -45,16 +43,6 @@ def _verifier_sortie(chemins: list[Path], sortie: Path) -> None:
 def _transformer_chemin(relatif: Path, moteur: Moteur, sens: Sens) -> Path:
     """Les noms de fichiers et de dossiers peuvent eux aussi contenir des termes sensibles."""
     return Path(*(moteur.transformer(partie, sens) for partie in relatif.parts))
-
-
-def _transformer(source: Path, moteur: Moteur, sens: Sens) -> Resultat:
-    donnees = source.read_bytes()
-    extension = source.suffix.lower()
-    if extension in EXTENSIONS_OOXML:
-        return transformer_ooxml(donnees, moteur, sens, str(source))
-    if extension == ".pdf":
-        donnees = pdf_vers_markdown(donnees, str(source)).encode("utf-8")
-    return transformer_texte(donnees, moteur, sens, str(source))
 
 
 def _fuites(resultat: Resultat, extension: str, relatif: Path, moteur: Moteur) -> list[str]:
@@ -91,7 +79,7 @@ def _traiter(chemins: list[Path], sortie: Path, moteur: Moteur, sens: Sens, exte
             code = ECHEC_FICHIERS
             continue
         try:
-            resultat = _transformer(source, moteur, sens)
+            resultat = transformer_fichier(source, moteur, sens)
         except ErreurFichier as e:
             _signaler("erreur", str(e))
             code = ECHEC_FICHIERS
@@ -138,7 +126,7 @@ def main_obfusquer(argv: list[str] | None = None) -> int:
     except ErreurConfiguration as e:
         _signaler("erreur", str(e))
         return ECHEC_CONFIGURATION
-    code = _traiter(args.chemins, args.sortie, moteur, "obfusquer", EXTENSIONS_OOXML | EXTENSIONS_TEXTE | {".pdf"}, args.table)
+    code = _traiter(args.chemins, args.sortie, moteur, "obfusquer", EXTENSIONS_LISIBLES, args.table)
     moteur.table.sauvegarder(args.table)
     print(f"Table de correspondance : {args.table} ({len(moteur.table.jetons)} jetons). Elle ne doit jamais quitter cette machine.", file=sys.stderr)
     return code

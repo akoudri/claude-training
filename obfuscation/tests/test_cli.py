@@ -90,7 +90,7 @@ def test_sortie_dans_la_source_non_retraitee(espace):
 
 def test_interruption_table_deja_sauvegardee(espace, monkeypatch):
     appels = []
-    original = cli._transformer
+    original = cli.transformer_fichier
 
     def transformer(source, moteur, sens):
         appels.append(source)
@@ -98,7 +98,7 @@ def test_interruption_table_deja_sauvegardee(espace, monkeypatch):
             raise KeyboardInterrupt
         return original(source, moteur, sens)
 
-    monkeypatch.setattr(cli, "_transformer", transformer)
+    monkeypatch.setattr(cli, "transformer_fichier", transformer)
     with pytest.raises(KeyboardInterrupt):
         obfusquer(espace)
     table = json.loads((espace / "client.table.json").read_text(encoding="utf-8"))
