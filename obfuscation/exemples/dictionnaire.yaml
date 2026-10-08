@@ -1,0 +1,13 @@
+# Dictionnaire du corpus fictif de local-llm/n8n/exemples/ (Projet Héron).
+# Une entrée = un terme, ou une liste de variantes qui partagent le même jeton ;
+# la première variante est celle que « restaurer » remet en place.
+CLIENT:
+  - [Acme Défense, Acme Defense, Acme]
+PRESTATAIRE:
+  - Novaltis
+PROJET:
+  - [Projet Héron, Héron, Heron]
+PERSONNE:
+  - Jeanne Martin
+motifs:
+  CONTRAT: 'CTR-\d{4}-\d{4}'
