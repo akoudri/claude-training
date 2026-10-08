@@ -1,5 +1,6 @@
 import pytest
 from documents import DICO
+from faux_ollama import FauxOllama
 
 from obfuscation.dictionnaire import charger_dictionnaires
 from obfuscation.moteur import Moteur
@@ -16,3 +17,11 @@ def dictionnaire(tmp_path):
 @pytest.fixture
 def moteur(dictionnaire):
     return Moteur(dictionnaire, Table())
+
+
+@pytest.fixture
+def faux_ollama():
+    serveur = FauxOllama()
+    serveur.demarrer()
+    yield serveur
+    serveur.arreter()
