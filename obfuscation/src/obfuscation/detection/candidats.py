@@ -13,6 +13,9 @@ MOTS_GENERIQUES = frozenset(normaliser(mot) for mot in (
     "client", "clients", "société", "entreprise", "prestataire", "fournisseur", "titulaire", "partenaire",
     "projet", "programme", "direction", "équipe", "service", "département", "groupe", "comité de pilotage",
 ))
+# Article ou déterminant initial, ignoré pour juger si une forme est un nom propre : « Le prestataire » n'en est pas un,
+# « La Défense » ou « L’Oréal » en sont.
+DETERMINANT = re.compile(r"^(?:(?:le|la|les|un|une|des|du|de)\s+|[ld][’'])", re.IGNORECASE)
 
 
 @dataclass
@@ -37,6 +40,12 @@ def _recherche(termes: list[str]) -> re.Pattern:
 
 def _sans_accents(texte: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", normaliser(texte)) if not unicodedata.combining(c))
+
+
+def _nom_propre(forme: str) -> bool:
+    """Un nom propre porte au moins une majuscule, article initial mis à part. Un nom tout en minuscules est écarté :
+    c'est le prix pour ne pas proposer « le site du client » ou « les locaux du client »."""
+    return any(c.isupper() for c in DETERMINANT.sub("", forme, count=1))
 
 
 def _contient(long: str, court: str) -> bool:
@@ -68,7 +77,7 @@ class Collecte:
                 self.rejetees += 1
                 continue
             forme = " ".join(trouve.group().split())  # la forme du texte, pas celle du modèle
-            if self.exclus.terme(forme) is not None:
+            if not _nom_propre(forme) or self.exclus.terme(forme) is not None:
                 self.ecartees += 1
                 continue
             cle = normaliser(forme)

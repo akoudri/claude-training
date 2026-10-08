@@ -44,6 +44,8 @@ class ClientOllama:
         reponse = self._requete("/api/chat", {
             "model": self.modele,
             "stream": False,
+            # Sans cela, un modèle à raisonnement (granite4.2) rédige plusieurs minutes de réflexion avant le JSON.
+            "think": False,
             "format": schema(categories),
             "options": {"temperature": 0},
             "messages": [

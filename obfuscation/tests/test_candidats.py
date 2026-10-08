@@ -123,3 +123,11 @@ def test_ordre_et_contexte():
     contexte = candidats[0].contexte
     assert contexte.startswith("…") and contexte.endswith("…")
     assert "Jeanne Martin" in contexte
+
+
+def test_expression_sans_majuscule_ecartee():
+    c = collecte()
+    texte = "Le prestataire travaille dans les locaux du client, puis chez le Groupe Valmont."
+    c.ajouter([P("le prestataire", "PRESTATAIRE"), P("locaux du client", "LIEU"), P("le Groupe Valmont", "CLIENT")], texte)
+    assert [k.variantes for k in c.candidats(texte)] == [["le Groupe Valmont"]]
+    assert c.ecartees == 2

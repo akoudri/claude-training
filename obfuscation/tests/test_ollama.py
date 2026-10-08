@@ -13,6 +13,7 @@ def test_envoie_modele_schema_et_temperature_nulle(faux_ollama):
     requete = faux_ollama.requetes[0]
     assert requete["model"] == "granite4.2:8b"
     assert requete["stream"] is False
+    assert requete["think"] is False  # granite4.2 raisonnerait plusieurs minutes avant de répondre
     assert requete["options"]["temperature"] == 0
     assert requete["format"]["properties"]["entites"]["items"]["properties"]["categorie"]["enum"] == CATEGORIES
     assert requete["messages"][0]["role"] == "system"
