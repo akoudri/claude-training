@@ -1,6 +1,8 @@
-from documents import zip_de
+import pytest
+from documents import docx_exemple, pptx_exemple, xlsx_exemple, zip_de
 
 from obfuscation.controle import Controle
+from obfuscation.formats.ooxml import transformer_ooxml
 from obfuscation.table import Table
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -59,3 +61,14 @@ def test_accents_decomposes_detectes(dictionnaire):
 def test_image_svg_analysee(dictionnaire):
     document = zip_de({"word/media/logo.svg": b'<svg xmlns="http://www.w3.org/2000/svg"><text>Novaltis</text></svg>'})
     assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["word/media/logo.svg : « Novaltis »"]
+
+
+@pytest.mark.parametrize("fabrique", [docx_exemple, xlsx_exemple, pptx_exemple])
+def test_documents_obfusques_conformes(moteur, fabrique):
+    donnees = transformer_ooxml(fabrique(), moteur, "obfusquer").donnees
+    assert Controle(moteur.dictionnaire, moteur.table).controler_ooxml(donnees) == []
+
+
+@pytest.mark.parametrize("fabrique", [docx_exemple, xlsx_exemple, pptx_exemple])
+def test_documents_originaux_non_conformes(moteur, fabrique):
+    assert Controle(moteur.dictionnaire, moteur.table).controler_ooxml(fabrique()) != []
