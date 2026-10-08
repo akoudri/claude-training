@@ -54,6 +54,8 @@ services:
   postgres:
     <<: *restart
     image: pgvector/pgvector:pg16
+    # 64 Mo par défaut : trop peu pour créer l'index ivfflat d'Open WebUI sur document_chunk
+    command: ["postgres", "-c", "maintenance_work_mem=256MB"]
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -83,6 +85,10 @@ services:
       - RAG_OLLAMA_BASE_URL=http://ollama:11434
       - VECTOR_DB=pgvector
       - PGVECTOR_DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/rag
+      # Embeddings par lots de 32, deux requêtes à la fois : sinon une requête par extrait, toutes lancées en
+      # même temps, et un gros PDF épuise les descripteurs de fichiers ("Too many open files").
+      - RAG_EMBEDDING_BATCH_SIZE=32
+      - RAG_EMBEDDING_CONCURRENT_REQUESTS=2
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=150
       - RAG_TOP_K=5
