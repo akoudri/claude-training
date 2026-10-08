@@ -78,7 +78,8 @@ class Controle:
             for texte in (element.text, element.tail):
                 if texte and texte.strip():
                     trouves |= self.chercher(texte)
-                    if not NOMBRE.fullmatch(texte.strip()):  # valeurs numériques (cellules, graphiques)
+                    if not (etree.QName(element).localname == "v" and NOMBRE.fullmatch(texte.strip())):
+                        # Les valeurs numériques des cellules et des graphiques (« v ») sont dispensées des motifs.
                         trouves |= self.chercher_motifs(texte)
             for valeur in element.attrib.values():
                 trouves |= self.chercher(valeur) | self.chercher_motifs(valeur, MOTIFS_ATTRIBUTS)

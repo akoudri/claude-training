@@ -111,3 +111,9 @@ def test_motifs_dans_un_texte(dictionnaire):
     assert Controle(dictionnaire, Table()).controler_texte("IBAN FR76 3000 6000 0112 3456 7890 189".encode()) == [
         "« FR76 3000 6000 0112 3456 7890 189 »"
     ]
+
+
+def test_nombre_sensible_hors_cellule_detecte(dictionnaire):
+    # Seules les valeurs de cellules et de graphiques (« v ») sont dispensées de la recherche des motifs.
+    document = zip_de({"docProps/custom.xml": b"<p><n>12345678200010</n><v>123456782</v></p>"})
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == ["docProps/custom.xml : « 12345678200010 »"]
