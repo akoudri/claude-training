@@ -145,7 +145,7 @@ def texte_brut(donnees: bytes) -> str:
     with zipfile.ZipFile(io.BytesIO(donnees)) as archive:
         for info in archive.infolist():
             contenu = archive.read(info)
-            if info.filename.endswith((".docx", ".xlsx", ".pptx")):
+            if contenu[:4] == b"PK\x03\x04":  # archive incorporée, quelle que soit son extension
                 morceaux.append(texte_brut(contenu))
                 continue
             morceaux.append(contenu.decode("utf-8", errors="ignore"))

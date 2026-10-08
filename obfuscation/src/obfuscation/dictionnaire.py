@@ -41,7 +41,14 @@ class Dictionnaire:
     motifs: dict[str, re.Pattern] = field(default_factory=dict)
 
     def terme(self, trouve: str) -> Terme | None:
-        return self.termes.get(normaliser(trouve))
+        terme = self.termes.get(normaliser(trouve))
+        if terme is None:
+            # re.IGNORECASE et casefold() divergent sur quelques lettres (« İ », « ſ »…) : la regex de chaque
+            # variante tranche, pour que tout ce que la recherche a trouvé soit bien remplacé.
+            for variante in self.variantes:
+                if re.fullmatch(motif_de_terme(variante), trouve, re.IGNORECASE):
+                    return self.termes[normaliser(variante)]
+        return terme
 
     @cached_property
     def recherche(self) -> re.Pattern | None:

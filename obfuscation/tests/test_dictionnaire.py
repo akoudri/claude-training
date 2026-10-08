@@ -80,3 +80,10 @@ def test_dictionnaire_vide(tmp_path):
 def test_erreurs_signalees_avec_position(tmp_path, contenu, attendu):
     with pytest.raises(ErreurDictionnaire, match=attendu.replace(".", r"\.")):
         charger_dictionnaires([ecrire(tmp_path, contenu)])
+
+
+def test_variante_retrouvee_malgre_les_ecarts_de_casse_unicode(tmp_path):
+    # « İ » (I turc) correspond à « i » pour re.IGNORECASE, mais « İ ».casefold() vaut « i̇ ».
+    dictionnaire = charger_dictionnaires([ecrire(tmp_path, "CLIENT:\n  - Istanbul Conseil\n")])
+    trouve = next(dictionnaire.recherche.finditer("chez İstanbul Conseil")).group(1)
+    assert dictionnaire.terme(trouve) == Terme("CLIENT", "Istanbul Conseil")

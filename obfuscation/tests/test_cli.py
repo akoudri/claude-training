@@ -123,3 +123,11 @@ def test_restaurer_sans_sortie_refuse(espace):
 
 def test_restaurer_table_introuvable(espace):
     assert cli.main_restaurer(["-", "-t", str(espace / "absente.table.json")]) == 2
+
+
+def test_nom_de_fichier_controle(espace, monkeypatch, capsys):
+    # Si une règle de nommage laissait passer un terme, le contrôle doit le voir aussi dans le nom.
+    monkeypatch.setattr(cli, "_transformer_chemin", lambda relatif, moteur, sens: relatif)
+    assert obfusquer(espace) == 1
+    assert (espace / "sortie" / "NON-CONFORME_Proposition Novaltis.docx").exists()
+    assert "nom du fichier : « Novaltis »" in capsys.readouterr().err

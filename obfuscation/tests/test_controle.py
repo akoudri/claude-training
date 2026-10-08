@@ -72,3 +72,42 @@ def test_documents_obfusques_conformes(moteur, fabrique):
 @pytest.mark.parametrize("fabrique", [docx_exemple, xlsx_exemple, pptx_exemple])
 def test_documents_originaux_non_conformes(moteur, fabrique):
     assert Controle(moteur.dictionnaire, moteur.table).controler_ooxml(fabrique()) != []
+
+
+def test_paquet_incorpore_reconnu_par_son_contenu(dictionnaire):
+    classeur = zip_de({"[Content_Types].xml": b"<Types/>", "xl/sharedStrings.xml": b"<sst><si><t>Novaltis</t></si></sst>"})
+    document = zip_de({"word/embeddings/Feuille.xlsm": classeur})
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == [
+        "word/embeddings/Feuille.xlsm › xl/sharedStrings.xml : « Novaltis »"
+    ]
+
+
+def test_image_vectorielle_et_image_mal_nommee_analysees(dictionnaire):
+    document = zip_de({
+        "word/media/image2.emf": b"\x01\x00\x00\x00" + "Novaltis".encode("utf-16-le"),
+        "word/media/image3.png": b"texte Novaltis",
+    })
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == [
+        "word/media/image2.emf : « Novaltis »",
+        "word/media/image3.png : « Novaltis »",
+    ]
+
+
+def test_motifs_recherches_meme_hors_table(dictionnaire):
+    document = zip_de({
+        "word/document.xml": f'<w:document xmlns:w="{W}" xmlns:r="http://schemas.openxmlformats.org/x">'
+        f'<w:sdt><w:sdtPr><w:tag w:val="paul@acme.example"/></w:sdtPr></w:sdt>'
+        f"<w:instrText>Écrire au 01 23 45 67 89</w:instrText>"
+        f'<w:x Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" w:id="123456782"/>'
+        f"<w:v>123456782</w:v></w:document>".encode(),
+    })
+    assert Controle(dictionnaire, Table()).controler_ooxml(document) == [
+        "word/document.xml : « 01 23 45 67 89 »",
+        "word/document.xml : « paul@acme.example »",
+    ]
+
+
+def test_motifs_dans_un_texte(dictionnaire):
+    assert Controle(dictionnaire, Table()).controler_texte("IBAN FR76 3000 6000 0112 3456 7890 189".encode()) == [
+        "« FR76 3000 6000 0112 3456 7890 189 »"
+    ]

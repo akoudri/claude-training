@@ -50,11 +50,13 @@ def _transformer(source: Path, moteur: Moteur, sens: Sens) -> Resultat:
     return transformer_texte(donnees, moteur, sens, str(source))
 
 
-def _fuites(resultat: Resultat, extension: str, moteur: Moteur) -> list[str]:
+def _fuites(resultat: Resultat, extension: str, relatif: Path, moteur: Moteur) -> list[str]:
     controle = Controle(moteur.dictionnaire, moteur.table)
+    nom = str(relatif)
+    fuites = [f"nom du fichier : « {terme} »" for terme in sorted(controle.chercher(nom) | controle.chercher_motifs(nom))]
     if extension in EXTENSIONS_OOXML:
-        return controle.controler_ooxml(resultat.donnees)
-    return controle.controler_texte(resultat.donnees)
+        return fuites + controle.controler_ooxml(resultat.donnees)
+    return fuites + controle.controler_texte(resultat.donnees)
 
 
 def _signaler_moteur(source: object, moteur: Moteur) -> None:
@@ -95,7 +97,7 @@ def _traiter(chemins: list[Path], sortie: Path, moteur: Moteur, sens: Sens, exte
         if sens == "obfusquer":
             # La table est enregistrée avant le document : une interruption ne laisse aucun jeton orphelin.
             moteur.table.sauvegarder(table)
-            fuites = _fuites(resultat, extension, moteur)
+            fuites = _fuites(resultat, extension, cible.relative_to(sortie), moteur)
             if fuites:
                 cible = cible.with_name(PREFIXE_NON_CONFORME + cible.name)
                 code = ECHEC_FICHIERS

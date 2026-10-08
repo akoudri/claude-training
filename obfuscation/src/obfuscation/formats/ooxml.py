@@ -23,6 +23,21 @@ def lire_xml(contenu: bytes) -> etree._Element:
     return etree.fromstring(contenu, PARSEUR)
 
 
+def est_archive(contenu: bytes) -> bool:
+    return contenu[:4] == b"PK\x03\x04"
+
+
+def est_paquet_office(contenu: bytes) -> bool:
+    """Document Office incorporé (.xlsx, mais aussi .xlsm, .docm, .potx…), reconnu à son contenu."""
+    if not est_archive(contenu):
+        return False
+    try:
+        with zipfile.ZipFile(io.BytesIO(contenu)) as archive:
+            return "[Content_Types].xml" in archive.namelist()
+    except zipfile.BadZipFile:
+        return False
+
+
 def extension(partie: str) -> str:
     """Extension d'une partie ; « _rels/.rels » en a une, contrairement à ce que dit PurePosixPath.suffix."""
     nom = PurePosixPath(partie).name
@@ -48,7 +63,7 @@ def transformer_ooxml(donnees: bytes, moteur: Moteur, sens: Sens, nom: str = "do
             type_partie = extension(info.filename)
             if type_partie in EXTENSIONS_XML:
                 contenu = _transformer_partie(contenu, info.filename, moteur, sens, miniatures, nom)
-            elif type_partie in EXTENSIONS_OOXML:
+            elif type_partie in EXTENSIONS_OOXML or est_paquet_office(contenu):
                 incorpore = transformer_ooxml(contenu, moteur, sens, f"{nom} › {info.filename}")
                 contenu = incorpore.donnees
                 avertissements += incorpore.avertissements

@@ -124,3 +124,8 @@ def test_texte_des_images_svg_obfusque(moteur):
     svg = b'<svg xmlns="http://www.w3.org/2000/svg"><text>Novaltis</text></svg>'
     resultat = zipfile.ZipFile(io.BytesIO(obfusquer(ajouter_partie(docx_exemple(), "word/media/logo.svg", svg), moteur).donnees))
     assert b"[CLIENT_1]" in resultat.read("word/media/logo.svg")
+
+
+def test_paquet_incorpore_reconnu_par_son_contenu(moteur):
+    original = ajouter_partie(docx_exemple(), "word/embeddings/Feuille.xlsm", xlsx_exemple())
+    assert sensibles(obfusquer(original, moteur).donnees) == set()
