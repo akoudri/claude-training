@@ -13,6 +13,7 @@ dependencies = [
 [project.scripts]
 obfusquer = "obfuscation.cli:main_obfusquer"
 restaurer = "obfuscation.cli:main_restaurer"
+detecter = "obfuscation.cli:main_detecter"
 
 [dependency-groups]
 dev = [

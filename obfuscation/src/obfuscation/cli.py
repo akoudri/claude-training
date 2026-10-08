@@ -1,12 +1,16 @@
-"""Commandes obfusquer et restaurer."""
+"""Commandes obfusquer, restaurer et detecter."""
 import argparse
 import sys
 from collections.abc import Iterator
 from pathlib import Path
 
 from .controle import Controle
-from .dictionnaire import Dictionnaire, charger_dictionnaires
+from .detection import CATEGORIES_PAR_DEFAUT, MODELE_PAR_DEFAUT, URL_PAR_DEFAUT, analyser
+from .detection.ollama import ClientOllama, ErreurOllama
+from .detection.sortie import ecrire, rendre
+from .dictionnaire import CATEGORIE, Dictionnaire, charger_dictionnaires
 from .erreurs import ErreurConfiguration, ErreurFichier, ErreurTable
+from .extraction import extraire
 from .formats import Resultat
 from .formats.fichier import EXTENSIONS_LISIBLES, EXTENSIONS_TEXTE, transformer_fichier
 from .formats.ooxml import EXTENSIONS_OOXML
@@ -155,3 +159,70 @@ def main_restaurer(argv: list[str] | None = None) -> int:
         _signaler_moteur("entrée standard", moteur)
         return SUCCES
     return _traiter([Path(c) for c in args.chemins], args.sortie, moteur, "restaurer", EXTENSIONS_OOXML | EXTENSIONS_TEXTE)
+
+
+def _categories(texte: str) -> list[str]:
+    categories = list(dict.fromkeys(c.strip() for c in texte.split(",") if c.strip()))
+    if not categories or not all(CATEGORIE.fullmatch(c) for c in categories):
+        raise ErreurConfiguration(f"catégories invalides : {texte} (majuscules, chiffres et _, séparées par des virgules)")
+    return categories
+
+
+def main_detecter(argv: list[str] | None = None) -> int:
+    parseur = argparse.ArgumentParser(
+        prog="detecter",
+        description="Propose un dictionnaire candidat à partir des entités repérées par un LLM local (Ollama). "
+        "Rien ne quitte la machine.",
+    )
+    parseur.add_argument("chemins", nargs="+", type=Path, help="fichiers ou dossiers à analyser")
+    parseur.add_argument("-o", "--sortie", required=True, type=Path, help="dictionnaire candidat à créer (jamais écrasé)")
+    parseur.add_argument("-d", "--dictionnaire", action="append", default=[], type=Path,
+                         help="dictionnaire existant, dont les termes ne sont pas reproposés (option répétable)")
+    parseur.add_argument("--modele", default=MODELE_PAR_DEFAUT, help=f"modèle Ollama (défaut : {MODELE_PAR_DEFAUT})")
+    parseur.add_argument("--ollama-url", default=URL_PAR_DEFAUT, help=f"serveur Ollama (défaut : {URL_PAR_DEFAUT})")
+    parseur.add_argument("--categories", default=",".join(CATEGORIES_PAR_DEFAUT),
+                         help="catégories recherchées, séparées par des virgules (défaut : %(default)s)")
+    parseur.add_argument("--delai", type=float, default=300.0, help="délai maximal par appel au modèle, en secondes")
+    args = parseur.parse_args(argv)
+    try:
+        categories = _categories(args.categories)
+        if args.sortie.exists():
+            raise ErreurConfiguration(f"{args.sortie} existe déjà : un dictionnaire candidat relu ne doit pas être écrasé")
+        exclus = charger_dictionnaires(args.dictionnaire)
+        client = ClientOllama(args.ollama_url, args.modele, args.delai)
+        client.verifier()
+    except ErreurConfiguration as e:
+        _signaler("erreur", str(e))
+        return ECHEC_CONFIGURATION
+    code = SUCCES
+    documents = []
+    for source, relatif in _fichiers(args.chemins, args.sortie):
+        if source.suffix.lower() not in EXTENSIONS_LISIBLES:
+            _signaler("avertissement", f"{source} : format non pris en charge, ignoré")
+            continue
+        try:
+            texte = extraire(source)
+        except ErreurFichier as e:
+            _signaler("erreur", str(e))
+            code = ECHEC_FICHIERS
+            continue
+        except OSError as e:
+            _signaler("erreur", f"{source} : lecture impossible ({e.strerror or e})")
+            code = ECHEC_FICHIERS
+            continue
+        # Les noms de fichiers et de dossiers peuvent eux aussi contenir des termes sensibles.
+        documents.append((str(relatif), "\n".join([*relatif.parts, texte])))
+    try:
+        bilan = analyser(documents, client, categories, exclus, _signaler)
+    except ErreurOllama as e:
+        _signaler("erreur", str(e))
+        return ECHEC_CONFIGURATION
+    ecrire(args.sortie, rendre(bilan.candidats, categories, args.modele, bilan.ignores))
+    if bilan.ignores:
+        code = ECHEC_FICHIERS
+    print(
+        f"Dictionnaire candidat : {args.sortie} ({len(bilan.candidats)} candidats ; {bilan.rejetees} propositions "
+        f"absentes du texte, rejetées ; {len(bilan.ignores)} morceaux non analysés). À relire avant usage.",
+        file=sys.stderr,
+    )
+    return code
