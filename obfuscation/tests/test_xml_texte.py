@@ -193,3 +193,13 @@ def test_nom_de_feuille_trop_long_remplace_entierement(moteur):
     feuille = next(racine.iter(f"{{{X}}}sheet")).get("name")
     assert feuille == "FEUILLE_1" and textes(racine, X, "f") == ["'FEUILLE_1'!A1"]
     assert moteur.transformer(feuille, "restaurer") == nom
+
+
+def test_references_3d(moteur):
+    racine = transformer(
+        f"<worksheet xmlns=\"{X}\"><f>SUM(Novaltis:Fin!A1)+SUM('Budget Héron:Fin'!B2)</f></worksheet>", moteur
+    )
+    assert textes(racine, X, "f") == ["SUM(CLIENT_1:Fin!A1)+SUM('Budget PROJET_1:Fin'!B2)"]
+    moteur.transformer("Jeanne Martin", "obfusquer")
+    restaure = transformer(f"<worksheet xmlns=\"{X}\"><f>SUM(CLIENT_1:PERSONNE_1!A1)</f></worksheet>", moteur, "restaurer")
+    assert textes(restaure, X, "f") == ["SUM('Novaltis:Jeanne Martin'!A1)"]

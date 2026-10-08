@@ -18,8 +18,9 @@ CELLULE = f"{{{X}}}c"
 VALEUR = f"{{{X}}}v"
 VALEUR_GRAPHIQUE = f"{{{C}}}v"
 
-# Référence à une feuille dans une formule : 'Nom avec espaces'!A1 ou Nom!A1
-REFERENCE_FEUILLE = re.compile(r"'(?:[^']|'')+'(?=!)|[^\W\d][\w.]*(?=!)")
+# Référence à une feuille dans une formule : 'Nom avec espaces'!A1, Nom!A1, ou référence 3D Début:Fin!A1
+# (« : » est interdit dans un nom de feuille, il sépare donc toujours les deux feuilles d'une référence 3D).
+REFERENCE_FEUILLE = re.compile(r"'(?:[^']|'')+'(?=!)|[^\W\d][\w.]*(?::[^\W\d][\w.]*)?(?=!)")
 NOM_SIMPLE = re.compile(r"[^\W\d][\w.]*")
 # Codes de mise en forme des en-têtes : &C, &"Arial,Gras", &12, &K00FF00, &&…
 CODE_EN_TETE = re.compile(r'&(?:"[^"]*"|\d+|K[0-9A-Fa-f]{6}|.)', re.DOTALL)
@@ -65,8 +66,9 @@ def traiter_formule(element: etree._Element, moteur: Moteur, sens: Sens) -> bool
         morceaux.append(moteur.transformer(texte[curseur:m.start()], sens))
         reference = m.group()
         citee = reference.startswith("'")
-        nom = nom_de_feuille(reference[1:-1].replace("''", "'") if citee else reference, moteur, sens)
-        morceaux.append(_citer(nom) if citee or not NOM_SIMPLE.fullmatch(nom) else nom)
+        noms = [nom_de_feuille(n, moteur, sens) for n in (reference[1:-1].replace("''", "'") if citee else reference).split(":")]
+        simple = not citee and all(NOM_SIMPLE.fullmatch(n) for n in noms)
+        morceaux.append(":".join(noms) if simple else _citer(":".join(noms)))
         curseur = m.end()
     morceaux.append(moteur.transformer(texte[curseur:], sens))
     nouveau = "".join(morceaux)
