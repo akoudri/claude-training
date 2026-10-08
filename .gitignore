@@ -38,3 +38,12 @@ local-llm/reports/*
 !local-llm/reports/.gitkeep
 local-llm/n8n/config/*
 !local-llm/n8n/config/*.example.json
+
+# Obfuscation — environnement, sorties et tables de correspondance (données sensibles)
+obfuscation/.venv/
+obfuscation/**/__pycache__/
+obfuscation/.pytest_cache/
+obfuscation/sortie/
+obfuscation/restaure/
+obfuscation/exemples/generes/
+*.table.json
