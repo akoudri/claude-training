@@ -83,8 +83,11 @@ def traiter_en_tete(element: etree._Element, moteur: Moteur, sens: Sens) -> bool
 
 
 def traiter_cellule_numerique(cellule: etree._Element, moteur: Moteur, sens: Sens) -> bool:
-    """Un nombre qui est un SIRET, un SIREN ou un téléphone devient une chaîne obfusquée."""
-    if sens != "obfusquer" or cellule.get("t", "n") != "n" or cellule.find(f"{{{X}}}f") is not None:
+    """Un nombre qui est un SIRET, un SIREN ou un téléphone devient une chaîne obfusquée.
+
+    Pour une formule, seul le résultat mis en cache est retiré : Excel le recalcule à l'ouverture.
+    """
+    if sens != "obfusquer" or cellule.get("t", "n") != "n":
         return False
     valeur = cellule.find(VALEUR)
     if valeur is None or not (valeur.text or "").isdigit():
@@ -92,6 +95,9 @@ def traiter_cellule_numerique(cellule: etree._Element, moteur: Moteur, sens: Sen
     remplacements = moteur.remplacements(valeur.text, sens)
     if not remplacements:
         return False
+    if cellule.find(f"{{{X}}}f") is not None:
+        cellule.remove(valeur)
+        return True
     texte = appliquer(valeur.text, remplacements)
     cellule.set("t", "inlineStr")
     cellule.remove(valeur)

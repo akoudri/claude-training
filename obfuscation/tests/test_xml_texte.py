@@ -142,3 +142,25 @@ def test_en_tete_excel_avec_codes(moteur):
         moteur,
     )
     assert textes(racine, X, "oddHeader") == ['&C[CLIENT_1] &"Arial,Gras"[PROJET_1]']
+
+
+def test_valeur_numerique_en_cache_d_une_formule_retiree(moteur):
+    # Le résultat mis en cache d'une formule (ici un SIRET) serait lisible dans le fichier.
+    racine = transformer(
+        f'<worksheet xmlns="{X}"><sheetData><row r="1"><c r="E1"><f>A2</f><v>12345678200010</v></c>'
+        f'<c r="F1"><f>A3</f><v>42</v></c></row></sheetData></worksheet>',
+        moteur,
+    )
+    cellules = {c.get("r"): c for c in racine.iter(f"{{{X}}}c")}
+    assert cellules["E1"].find(f"{{{X}}}v") is None and cellules["E1"].findtext(f"{{{X}}}f") == "A2"
+    assert cellules["F1"].findtext(f"{{{X}}}v") == "42"
+
+
+def test_instructions_de_champ_et_alias(moteur):
+    racine = transformer(
+        f'<w:document xmlns:w="{W}"><w:p><w:fldSimple w:instr="HYPERLINK &quot;https://novaltis.fr&quot;"/></w:p>'
+        f'<w:sdt><w:sdtPr><w:alias w:val="Contrat Novaltis"/></w:sdtPr></w:sdt></w:document>',
+        moteur,
+    )
+    assert next(racine.iter(f"{{{W}}}fldSimple")).get(f"{{{W}}}instr") == 'HYPERLINK "[URL_1]"'
+    assert next(racine.iter(f"{{{W}}}alias")).get(f"{{{W}}}val") == "Contrat [CLIENT_1]"

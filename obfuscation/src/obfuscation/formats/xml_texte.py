@@ -25,9 +25,10 @@ UNITES = {
 }
 SEGMENTS = {tag for tags in UNITES.values() for tag in tags}
 PRESERVER_ESPACES = {_q(W, "t"), _q(W, "delText"), _q(X, "t")}
-# Attributs lisibles : relecteurs, textes de remplacement des images, info-bulles…
-ATTRIBUTS = {"author", "initials", "descr", "title", "tooltip", "userName"}
+# Attributs lisibles : relecteurs, textes de remplacement des images, info-bulles, instructions de champs…
+ATTRIBUTS = {"author", "initials", "descr", "title", "tooltip", "userName", "instr"}
 ATTRIBUTS_PAR_ELEMENT = {
+    ("alias", "val"),
     ("cNvPr", "name"),
     ("docPr", "name"),
     ("person", "displayName"),
