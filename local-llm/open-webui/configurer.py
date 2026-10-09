@@ -3,12 +3,16 @@
 Lancé par le service ponctuel open-webui-init (docker-compose.yml), une fois Open WebUI démarré et les modèles
 téléchargés. Il se connecte avec le compte administrateur de .env (WEBUI_ADMIN_EMAIL, WEBUI_ADMIN_PASSWORD) et :
 
+- aligne le moteur d'extraction des documents sur docker-compose.docling.yml (tutoriel 01, section 6.2.1) : Docling
+  si l'overlay est chargé ; retour à l'extracteur intégré s'il a été retiré ; un autre moteur choisi à la main est
+  laissé tel quel ;
 - règle le modèle de base (tutoriel 01, section 3) : think, max_tokens, temperature, function calling, capabilities ;
 - si OPENWEBUI_EXEMPLES=true, crée la base « MBSE Expert » avec le corpus fictif (tutoriel 01, section 6.1) et
   l'assistant « Expert MBSE » (tutoriel 02, section 5).
 
-Relançable sans effet de bord : le modèle de base est remis aux valeurs ci-dessous, la base et l'assistant ne
-sont créés que s'ils n'existent pas. Bibliothèque standard uniquement.
+Relançable sans effet de bord : le moteur d'extraction n'est modifié que s'il diffère de la valeur voulue, le modèle
+de base est remis aux valeurs ci-dessous, la base et l'assistant ne sont créés que s'ils n'existent pas.
+Bibliothèque standard uniquement.
 """
 import json
 import os
@@ -106,6 +110,48 @@ def regler_modele_de_base(jeton, nom):
     print(f"modèle de base {nom} : réglé ({action})")
 
 
+def docling_depuis_env(env):
+    """Réglages Docling transmis par docker-compose.docling.yml, ou None si l'overlay n'est pas chargé."""
+    if env.get("OPENWEBUI_DOCLING", "").lower() != "true":
+        return None
+    url = env.get("DOCLING_SERVER_URL", "")
+    if not url:
+        raise Echec("OPENWEBUI_DOCLING=true mais DOCLING_SERVER_URL est vide")
+    try:
+        params = json.loads(env.get("DOCLING_PARAMS") or "{}")
+    except json.JSONDecodeError as e:
+        raise Echec(f"DOCLING_PARAMS n'est pas du JSON valide : {e}") from None
+    if not isinstance(params, dict):
+        raise Echec("DOCLING_PARAMS doit être un objet JSON, par exemple {\"do_ocr\": \"false\"}")
+    return {"url": url, "params": params}
+
+
+def reglage_extraction(config, docling):
+    """Champs à envoyer à /api/v1/retrieval/config/update (None si rien à changer) et libellé d'état.
+
+    Overlay chargé : Docling, avec l'URL et les paramètres de l'overlay. Overlay retiré : retour à l'extracteur
+    intégré, seulement si le moteur est encore Docling (un autre moteur, choisi à la main, est respecté).
+    """
+    moteur = config.get("CONTENT_EXTRACTION_ENGINE") or ""
+    if docling:
+        voulu = {"CONTENT_EXTRACTION_ENGINE": "docling", "DOCLING_SERVER_URL": docling["url"],
+                 "DOCLING_PARAMS": docling["params"]}
+        if all(config.get(cle) == valeur for cle, valeur in voulu.items()):
+            return None, "Docling (inchangé)"
+        return voulu, "Docling (réglé)"
+    if moteur == "docling":
+        return {"CONTENT_EXTRACTION_ENGINE": ""}, "extracteur intégré (Docling retiré)"
+    return None, f"{moteur or 'extracteur intégré'} (inchangé)"
+
+
+def synchroniser_extraction(jeton, docling):
+    config = appel("GET", "/api/v1/retrieval/config", jeton)
+    champs, etat = reglage_extraction(config, docling)
+    if champs:
+        appel("POST", "/api/v1/retrieval/config/update", jeton, champs)
+    print(f"extraction des documents : {etat}")
+
+
 def televerser(jeton, chemin):
     frontiere = uuid.uuid4().hex
     corps = (
@@ -175,7 +221,9 @@ def main():
               "(réglages à faire à la main, tutoriels 01 et 02)")
         return 0
     try:
+        docling = docling_depuis_env(os.environ)
         jeton = connexion(email, mot_de_passe)
+        synchroniser_extraction(jeton, docling)
         regler_modele_de_base(jeton, modele_de_base)
         if os.environ.get("OPENWEBUI_EXEMPLES", "").lower() == "true":
             creer_assistant(jeton, modele_de_base, creer_base(jeton))
