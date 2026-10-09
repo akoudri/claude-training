@@ -108,7 +108,7 @@ il remet déjà le modèle de base aux valeurs de la section 3.
 
 ## PDF d'exemple
 
-`open-webui/exemples/generer-pdf.py` produit `open-webui/exemples/matrice-conformite-heron.pdf`, versionné avec lui
+`open-webui/exemples/generer-pdf.py` produit `open-webui/exemples/matrice-acteurs-heron.pdf`, versionné avec lui
 (document fictif, cohérent avec le corpus Projet Héron). Le script s'exécute sans installation durable :
 `uv run --with reportlab==<version> open-webui/exemples/generer-pdf.py`.
 
