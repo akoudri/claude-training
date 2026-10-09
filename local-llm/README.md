@@ -34,7 +34,7 @@ Les commandes se lancent depuis le dossier `local-llm/`. Le détail de chaque é
 docker compose down --remove-orphans
 docker volume rm local-llm_openwebui local-llm_pg local-llm_n8n   # comptes, conversations, bases, workflows : perdus
 docker volume rm local-llm_ollama                                 # facultatif : évite de retélécharger ~6,5 Go de modèles
-docker compose pull                                               # dernières images (Open WebUI suit la branche main)
+docker compose pull                                               # dernières images (Open WebUI suit la branche main) ; "denied" sur ghcr.io : docker logout ghcr.io
 ```
 
 Supprimer le volume `local-llm_openwebui` est indispensable pour repartir des réglages de `docker-compose.yml` : Open WebUI ne lit ses variables d'environnement qu'au premier démarrage (PersistentConfig).
@@ -65,7 +65,7 @@ Puis éditer `.env` :
 docker compose up -d
 docker compose logs -f ollama-init        # téléchargement des modèles ; se termine par "success"
 docker compose ps -a                      # ollama-init et open-webui-init : "Exited (0)" ; docling : "(healthy)"
-docker compose logs open-webui-init       # "modèle de base granite4.2:8b : réglé", et "Docling (réglé)" avec l'overlay
+docker compose logs open-webui-init       # "modèle de base granite4.2:8b : réglé", et "Docling" avec l'overlay
 ```
 
 Ouvrir http://localhost:3000 et se connecter avec `WEBUI_ADMIN_EMAIL` / `WEBUI_ADMIN_PASSWORD`. Après un premier message, `docker compose exec ollama ollama ps` doit afficher `100% GPU` avec un profil GPU.
@@ -79,9 +79,11 @@ Avec Docling, les PDF déposés dans une base de connaissances comme ceux joints
 3. Créer les fichiers de configuration, puis les remplir :
 
    ```bash
-   cp n8n/config/notification.example.json n8n/config/notification.json
-   cp n8n/config/sensitive-terms.example.json n8n/config/sensitive-terms.json
+   cp -n n8n/config/notification.example.json n8n/config/notification.json
+   cp -n n8n/config/sensitive-terms.example.json n8n/config/sensitive-terms.json
    ```
+
+   `cp -n` garde les fichiers déjà remplis lors d'une installation précédente : ils sont hors des volumes Docker.
 
 4. Tester et déployer les workflows :
 
