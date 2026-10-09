@@ -362,7 +362,7 @@ docker compose exec postgres psql -U n8n -d rag -c "
 
 **Limites** : Docling n'est pas infaillible.
 
-- Une cellule dont le texte touche presque le bord de sa colonne peut déborder sur la cellule voisine. Dans le PDF d'exemple, la première ligne du tableau des livrables sort ainsi en `Rapport d'inventaire des modèlesEX-01`, avec une colonne *Exigence* vide.
+- Une cellule dont le texte touche presque le bord de sa colonne peut déborder sur la cellule voisine. Observé sur une première version du PDF d'exemple : la première ligne du tableau des livrables sortait en `Rapport d'inventaire des modèles EX-01`, avec une colonne *Exigence* vide. Le PDF fourni ne le provoque plus, mais un document réel peut le faire.
 - Docling aligne les colonnes de ses tableaux avec des espaces. Un tableau de plus de quelques lignes dépasse donc vite la taille d'un extrait (`CHUNK_SIZE`, 1 000 caractères, section 5) et se retrouve coupé : seul le premier morceau porte la ligne d'en-tête. Le modèle reçoit alors des lignes sans le nom des colonnes.
 
 **Dépannage**
