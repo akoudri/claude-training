@@ -218,7 +218,8 @@ def main():
     modele_de_base = os.environ["LLM_MODEL"]
     if not email or not mot_de_passe:
         print("WEBUI_ADMIN_EMAIL ou WEBUI_ADMIN_PASSWORD absent de .env : rien n'est configuré "
-              "(réglages à faire à la main, tutoriels 01 et 02)")
+              "(réglages à faire à la main, tutoriels 01 et 02, y compris le moteur d'extraction si "
+              "docker-compose.docling.yml est ajouté ou retiré : tutoriel 01, section 6.2.1)")
         return 0
     try:
         docling = docling_depuis_env(os.environ)

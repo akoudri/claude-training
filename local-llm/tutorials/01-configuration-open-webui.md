@@ -327,6 +327,8 @@ docker compose logs open-webui-init        # "extraction des documents : Docling
 
 Open WebUI ne lit ses variables d'extraction qu'au premier démarrage (PersistentConfig, section 2) : c'est donc `open-webui-init` qui bascule une installation existante sur Docling. Le réglage est visible dans *Admin Panel → Settings → Documents → Content Extraction Engine*. Les documents déjà indexés ne sont pas reconvertis : pour en profiter, les retirer de la base et les ajouter à nouveau.
 
+> **Sans compte administrateur dans `.env`** (`WEBUI_ADMIN_EMAIL` vide), `open-webui-init` ne règle rien, et la bascule est à faire à la main sur une installation existante, à l'activation comme au retrait : *Admin Panel → Settings → Documents → Content Extraction Engine*, `Docling` avec l'URL `http://docling:5001`, ou retour à `Default`. Sinon, après un retrait, chaque dépôt de PDF ou de DOCX échoue.
+
 **Désactiver** : retirer `:docker-compose.docling.yml` de `COMPOSE_FILE`, puis `docker compose up -d --remove-orphans`. `open-webui-init` affiche alors « extraction des documents : extracteur intégré (Docling retiré) ». Sans cette bascule, Open WebUI continuerait d'envoyer les fichiers à un service arrêté, et chaque dépôt échouerait.
 
 > Comme pour le modèle de base, relancer `open-webui-init` remet le moteur d'extraction aux valeurs de l'overlay. Un autre moteur choisi à la main dans l'interface (Tika, par exemple) n'est conservé que si l'overlay n'est pas chargé.
@@ -344,7 +346,7 @@ Open WebUI ne lit ses variables d'extraction qu'au premier démarrage (Persisten
 
 Observé sur la configuration de référence (deux essais par extracteur) :
 
-- **sans Docling**, le PDF donne 3 extraits, un par page, qui commencent tous par le pied de page. Le tableau est aplati, une cellule par ligne : une cellule vide ne laisse aucune trace. Le modèle répond donc « lecture seule » pour la classification de Kerlan Ingénierie et « en attente » pour l'accès d'Orbitec Systèmes, aux deux essais, en prenant la valeur de la colonne voisine. La question 3 n'est réussie qu'une fois sur deux (l'autre réponse s'emballe jusqu'à `max_tokens`) ; la question 4 est réussie ;
+- **sans Docling**, le PDF donne 3 extraits, un par page, qui commencent tous par le pied de page. Le tableau est aplati, une cellule par ligne : une cellule vide ne laisse aucune trace. Le modèle répond donc « lecture seule » pour la classification de Kerlan Ingénierie et « en attente » pour l'accès d'Orbitec Systèmes, aux deux essais, en prenant la valeur de la colonne voisine. La question 3 n'est réussie qu'une fois sur deux (l'autre réponse s'emballe et ne conclut pas) ; la question 4 est réussie ;
 - **avec Docling**, le PDF donne 7 extraits, un par section, sans pied de page, et les tableaux restent des tableaux. Les questions 1, 3 et 4 sont réussies aux deux essais. À la question 2, la conclusion est juste (accès non indiqué), mais un essai affirme à tort qu'Orbitec Systèmes ne figure pas dans le tableau : voir la deuxième limite ci-dessous.
 
 Pour voir la différence à la source, compter dans `document_chunk` (section 6.4) les extraits qui contiennent le pied de page :
@@ -365,8 +367,8 @@ docker compose exec postgres psql -U n8n -d rag -c "
 
 | Symptôme | Cause | Remède |
 |---|---|---|
-| L'indexation d'un long PDF échoue après plusieurs minutes ; `docker compose logs docling` cite `DOCLING_SERVE_MAX_SYNC_WAIT` | Conversion plus longue que le délai de Docling (30 min) | Relever `DOCLING_SERVE_MAX_SYNC_WAIT` dans `docker-compose.docling.yml`, ou découper le document. |
-| Tout dépôt de PDF ou de DOCX échoue aussitôt | Docling arrêté ou pas encore prêt | `docker compose ps docling`, puis `docker compose logs docling`. Si l'overlay a été retiré, relancer `docker compose up open-webui-init`. |
+| L'indexation d'un long PDF échoue au bout de 30 min ; `docker compose logs docling` cite `DOCLING_SERVE_MAX_SYNC_WAIT` | Conversion plus longue que le délai de Docling (30 min) | Relever `DOCLING_SERVE_MAX_SYNC_WAIT` dans `docker-compose.docling.yml`, ou découper le document. |
+| Tout dépôt de PDF ou de DOCX échoue aussitôt | Docling arrêté ou pas encore prêt | `docker compose ps docling`, puis `docker compose logs docling`. Si l'overlay a été retiré, relancer `docker compose up open-webui-init`, ou, sans compte administrateur dans `.env`, remettre *Content Extraction Engine* à `Default` à la main. |
 | Le conteneur `docling` redémarre pendant une conversion | Mémoire insuffisante (conteneur tué) | Relever `DOCLING_MEM_LIMIT` dans `.env`, sans dépasser la RAM disponible. |
 | `open-webui-init` s'arrête sur « DOCLING_PARAMS n'est pas du JSON valide » | Faute de frappe dans `docker-compose.docling.yml` | Corriger la valeur : un objet JSON, guillemets doubles. |
 

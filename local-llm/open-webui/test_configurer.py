@@ -1,7 +1,11 @@
 """Tests de la synchronisation du moteur d'extraction (python3 -m unittest, depuis local-llm/open-webui)."""
+import contextlib
+import io
+import os
 import unittest
+from unittest import mock
 
-from configurer import Echec, docling_depuis_env, reglage_extraction
+from configurer import Echec, docling_depuis_env, main, reglage_extraction
 
 DOCLING = {"url": "http://docling:5001", "params": {"do_ocr": "false", "table_mode": "accurate"}}
 ALIGNE = {
@@ -70,6 +74,15 @@ class DoclingDepuisEnv(unittest.TestCase):
     def test_url_absente(self):
         with self.assertRaisesRegex(Echec, "DOCLING_SERVER_URL"):
             docling_depuis_env({"OPENWEBUI_DOCLING": "true"})
+
+
+class SansIdentifiants(unittest.TestCase):
+    def test_signale_le_moteur_d_extraction_a_regler_a_la_main(self):
+        sortie = io.StringIO()
+        with mock.patch.dict(os.environ, {"LLM_MODEL": "x", "WEBUI_ADMIN_EMAIL": "", "WEBUI_ADMIN_PASSWORD": ""}), \
+                contextlib.redirect_stdout(sortie):
+            self.assertEqual(main(), 0)
+        self.assertIn("moteur d'extraction", sortie.getvalue())
 
 
 if __name__ == "__main__":

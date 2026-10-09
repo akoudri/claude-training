@@ -39,6 +39,9 @@ local-llm/reports/*
 local-llm/n8n/config/*
 !local-llm/n8n/config/*.example.json
 
+# LLM local — fichiers générés par Python (tests de open-webui/)
+local-llm/**/__pycache__/
+
 # Obfuscation — environnement, sorties et tables de correspondance (données sensibles)
 obfuscation/.venv/
 obfuscation/**/__pycache__/
