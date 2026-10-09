@@ -4,7 +4,7 @@ Simple demo
 
 ## Tutoriels
 
-Les tutoriels portent sur la stack LLM locale de `docker-compose.yml` (Ollama, Open WebUI, pgvector), complétée au besoin par n8n (`docker-compose.n8n.yml`, requis par le tutoriel 3). Elle tourne sur toute machine avec Docker : sur le CPU par défaut, ou sur un GPU AMD, Intel ou NVIDIA selon le profil choisi dans `.env` (tutoriel 1, section 2). Les tutoriels sont rangés dans l'ordre conseillé de lecture.
+Les tutoriels portent sur la stack LLM locale de `docker-compose.yml` (Ollama, Open WebUI, pgvector), complétée au besoin par n8n (`docker-compose.n8n.yml`, requis par le tutoriel 3) et par Docling (`docker-compose.docling.yml`, meilleure lecture des PDF par Open WebUI, tutoriel 1, section 6.2.1). Elle tourne sur toute machine avec Docker : sur le CPU par défaut, ou sur un GPU AMD, Intel ou NVIDIA selon le profil choisi dans `.env` (tutoriel 1, section 2). Les tutoriels sont rangés dans l'ordre conseillé de lecture.
 
 | # | Tutoriel | Contenu |
 |---|---|---|

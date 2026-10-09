@@ -566,7 +566,7 @@ Aucun repli n'a donc été appliqué.
 | **Ingestion interrompue** | Le `DROP TABLE` du workflow 01 s'exécute **avant** la lecture des fichiers. Une ingestion qui échoue laisse l'index vide ou partiel : relancer le workflow. |
 | **Signature du mail d'échec** | Elle indique « Rapport complet : dossier reports/ », alors qu'aucun rapport n'est écrit en cas d'échec. |
 | **Collision de nom de rapport** | Le nom est à la minute (`…-HHMM.md`) : deux analyses terminées dans la même minute s'écrasent. |
-| **Qualité d'extraction des PDF** | Les tableaux sont aplatis, les en-têtes et pieds de page polluent les extraits, et un acteur peut être attribué au mauvais rôle. Même constat que dans le [tutoriel 01](01-configuration-open-webui.md#62-choisir-le-bon-format-de-fichier) (section 6.2) : préférer le DOCX. |
+| **Qualité d'extraction des PDF** | Les tableaux sont aplatis, les en-têtes et pieds de page polluent les extraits, et un acteur peut être attribué au mauvais rôle. Même constat que dans le [tutoriel 01](01-configuration-open-webui.md#62-choisir-le-bon-format-de-fichier) (section 6.2) : préférer le DOCX. Docling (section 6.2.1 du même tutoriel) ne sert qu'à Open WebUI : l'ingestion n8n garde son propre chargeur. |
 | **Débit** | ~14 tokens/s sur la configuration de référence : traitement de fond, pas conversationnel. Une analyse bloque Open WebUI (section 5.4). |
 | **Contrôle de confidentialité** | Limité aux termes du dictionnaire (section 8.2). |
 

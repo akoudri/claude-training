@@ -58,7 +58,7 @@ Un assistant référence des bases et des outils : il faut donc **les créer ava
 
 | Bonne pratique | Pourquoi |
 |---|---|
-| Préférer **DOCX ou Markdown** au PDF | Le PDF aplatit les tableaux et transforme la table des matières et les pieds de page en extraits parasites. Une question sur un tableau extrait d'un PDF a attribué une information au mauvais acteur. |
+| Préférer **DOCX ou Markdown** au PDF, sauf avec Docling | Avec l'extracteur intégré, le PDF aplatit les tableaux et transforme la table des matières et les pieds de page en extraits parasites : une question sur un tableau extrait d'un PDF a attribué une information au mauvais acteur. Docling corrige l'essentiel de ces défauts ([tutoriel 01](01-configuration-open-webui.md#621-activer-docling-pour-les-pdf), section 6.2.1). |
 | **Une seule version** de chaque document | Un même rapport en PDF et en DOCX produit des extraits en double, qui occupent les places du Top K. |
 | Une base **par domaine** | Une base fourre-tout dilue la recherche. Mieux vaut plusieurs bases, attachées au bon assistant. |
 

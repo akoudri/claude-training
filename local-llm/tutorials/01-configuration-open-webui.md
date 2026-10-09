@@ -69,6 +69,8 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
 
    **n8n est optionnel** : il n'est utile qu'à l'agent du [tutoriel 03](03-agent-n8n.md). Pour l'inclure, ajouter `:docker-compose.n8n.yml` à la fin de la ligne `COMPOSE_FILE`, ou décommenter la ligne « + n8n » qui correspond à la machine (sans profil GPU : `COMPOSE_FILE=docker-compose.yml:docker-compose.n8n.yml`). Il peut aussi être ajouté plus tard : un nouveau `docker compose up -d` le démarre.
 
+   **Docling est optionnel** lui aussi : il améliore nettement la lecture des PDF (section 6.2.1), au prix d'une image de 5,1 Go et d'une indexation plus lente. Pour l'inclure, ajouter `:docker-compose.docling.yml` à la fin de la ligne `COMPOSE_FILE`. Il peut être ajouté plus tard.
+
    Ajuster ensuite la mémoire :
 
    - le modèle de chat et son contexte doivent tenir dans la mémoire du GPU, ou dans la RAM en mode CPU : ~8 Go pour `granite4.2:8b` à 32k ;
@@ -292,12 +294,81 @@ Tous les formats ne se valent pas. La qualité des réponses dépend d'abord de 
 | Format | Qualité | Pourquoi |
 |---|---|---|
 | **DOCX, Markdown** | ✅ Bonne | Les titres sont reconnus : le découpage suit les sections. Les tableaux gardent leurs lignes et leurs colonnes. |
-| **PDF** | ⚠️ Moyenne | Le texte est extrait page par page, sans structure. **Les tableaux sont aplatis** et leurs colonnes se mélangent. La **table des matières** et les **pieds de page** (mentions de copyright…) deviennent des extraits à part entière, qui encombrent la recherche. |
-| PDF scanné | ❌ | Aucun texte sans OCR (non configuré dans cette stack). |
+| **PDF**, extracteur intégré | ⚠️ Moyenne | Le texte est extrait page par page, sans structure. **Les tableaux sont aplatis** et leurs colonnes se mélangent. La **table des matières** et les **pieds de page** (mentions de copyright…) deviennent des extraits à part entière, qui encombrent la recherche. |
+| **PDF**, avec Docling (6.2.1) | ✅ Bonne | La mise en page est analysée : tableaux restitués en tableaux Markdown, en-têtes et pieds de page écartés, titres reconnus (le découpage suit les sections). La table des matières reste un extrait. |
+| PDF scanné | ❌ | Aucun texte sans OCR. Docling sait le faire, mais l'OCR est désactivé par défaut (6.2.1). |
 
 Exemple observé : dans un tableau comparatif extrait d'un PDF, le modèle a attribué à Acme Défense une classification qui appartenait à une autre organisation, parce que les colonnes étaient mélangées.
 
-> **Règle pratique** : quand un document existe en DOCX et en PDF, indexer le DOCX.
+> **Règle pratique** : quand un document existe en DOCX et en PDF, indexer le DOCX. Sans DOCX, activer Docling (6.2.1) avant d'indexer des PDF qui contiennent des tableaux.
+
+#### 6.2.1 Activer Docling pour les PDF
+
+[Docling](https://github.com/docling-project/docling-serve) convertit chaque document en Markdown en analysant sa mise en page. Une fois activé, Open WebUI lui envoie tous les fichiers déposés, sauf le Markdown et le texte brut qu'il lit lui-même : les PDF, mais aussi les DOCX, PPTX et XLSX.
+
+**Coût**, mesuré sur la configuration de référence :
+
+| | |
+|---|---|
+| Image Docker | 5,1 Go à télécharger une fois |
+| Mémoire | ~0,8 Go au repos, jusqu'à ~3,3 Go pendant la conversion d'un long PDF (plafond : `DOCLING_MEM_LIMIT` dans `.env`, 6 Go par défaut) |
+| Démarrage | ~10 s avant qu'Open WebUI ne démarre |
+| Conversion | ~0,5 s par page : 1 min 30 s pour un PDF de 182 pages ; 8 s au lieu de 2 s pour indexer le PDF d'exemple de 3 pages |
+
+L'indexation d'un PDF est donc nettement plus lente qu'avec l'extracteur intégré : c'est le prix de la structure.
+
+**Activer** : ajouter `:docker-compose.docling.yml` à la fin de la ligne `COMPOSE_FILE` de `.env`, puis :
+
+```bash
+docker compose up -d
+docker compose ps docling                  # doit afficher "(healthy)"
+docker compose logs open-webui-init        # "extraction des documents : Docling (réglé)"
+```
+
+Open WebUI ne lit ses variables d'extraction qu'au premier démarrage (PersistentConfig, section 2) : c'est donc `open-webui-init` qui bascule une installation existante sur Docling. Le réglage est visible dans *Admin Panel → Settings → Documents → Content Extraction Engine*. Les documents déjà indexés ne sont pas reconvertis : pour en profiter, les retirer de la base et les ajouter à nouveau.
+
+**Désactiver** : retirer `:docker-compose.docling.yml` de `COMPOSE_FILE`, puis `docker compose up -d --remove-orphans`. `open-webui-init` affiche alors « extraction des documents : extracteur intégré (Docling retiré) ». Sans cette bascule, Open WebUI continuerait d'envoyer les fichiers à un service arrêté, et chaque dépôt échouerait.
+
+> Comme pour le modèle de base, relancer `open-webui-init` remet le moteur d'extraction aux valeurs de l'overlay. Un autre moteur choisi à la main dans l'interface (Tika, par exemple) n'est conservé que si l'overlay n'est pas chargé.
+
+**PDF scannés (OCR)** : l'OCR est désactivé, car il ne sert qu'aux PDF sans texte et multiplie le temps de conversion (6 s au lieu de 2 s pour 3 pages sur la configuration de référence). Pour l'activer, remplacer `"do_ocr": "false"` par `"do_ocr": "true"` dans `docker-compose.docling.yml` (variable `DOCLING_PARAMS`), puis `docker compose up -d`.
+
+**Exercice : comparer les deux extracteurs.** Le PDF fictif `open-webui/exemples/matrice-acteurs-heron.pdf` contient un sommaire, un pied de page répété et un tableau dont certaines cellules sont vides ou tiennent sur plusieurs lignes. Le joindre à une conversation (bouton **+** → *Upload Files*), une fois sans Docling et une fois avec, et poser les mêmes questions :
+
+| Question | Réponse attendue |
+|---|---|
+| « Quelle classification des données s'applique à Kerlan Ingénierie ? » | Aucune n'est indiquée (cellule vide). |
+| « Quel accès au référentiel SysML a Orbitec Systèmes ? » | Aucun n'est indiqué (cellule vide). |
+| « Quelles organisations ont un accès en lecture seule au référentiel SysML ? » | Bureau Vertex et Kerlan Ingénierie. |
+| « Qui relit le plan de migration, et quelle est son échéance ? » | Bureau Vertex, mois 6. |
+
+Observé sur la configuration de référence (deux essais par extracteur) :
+
+- **sans Docling**, le PDF donne 3 extraits, un par page, qui commencent tous par le pied de page. Le tableau est aplati, une cellule par ligne : une cellule vide ne laisse aucune trace. Le modèle répond donc « lecture seule » pour la classification de Kerlan Ingénierie et « en attente » pour l'accès d'Orbitec Systèmes, aux deux essais, en prenant la valeur de la colonne voisine. La question 3 n'est réussie qu'une fois sur deux (l'autre réponse s'emballe jusqu'à `max_tokens`) ; la question 4 est réussie ;
+- **avec Docling**, le PDF donne 7 extraits, un par section, sans pied de page, et les tableaux restent des tableaux. Les questions 1, 3 et 4 sont réussies aux deux essais. À la question 2, la conclusion est juste (accès non indiqué), mais un essai affirme à tort qu'Orbitec Systèmes ne figure pas dans le tableau : voir la deuxième limite ci-dessous.
+
+Pour voir la différence à la source, compter dans `document_chunk` (section 6.4) les extraits qui contiennent le pied de page :
+
+```bash
+docker compose exec postgres psql -U n8n -d rag -c "
+  SELECT collection_name, count(*) AS extraits,
+         count(*) FILTER (WHERE text ILIKE '%Diffusion restreinte%') AS avec_pied_de_page
+  FROM document_chunk WHERE vmetadata->>'name' = 'matrice-acteurs-heron.pdf' GROUP BY 1;"
+```
+
+**Limites** : Docling n'est pas infaillible.
+
+- Une cellule dont le texte touche presque le bord de sa colonne peut déborder sur la cellule voisine. Dans le PDF d'exemple, la première ligne du tableau des livrables sort ainsi en `Rapport d'inventaire des modèlesEX-01`, avec une colonne *Exigence* vide.
+- Docling aligne les colonnes de ses tableaux avec des espaces. Un tableau de plus de quelques lignes dépasse donc vite la taille d'un extrait (`CHUNK_SIZE`, 1 000 caractères, section 5) et se retrouve coupé : seul le premier morceau porte la ligne d'en-tête. Le modèle reçoit alors des lignes sans le nom des colonnes.
+
+**Dépannage**
+
+| Symptôme | Cause | Remède |
+|---|---|---|
+| L'indexation d'un long PDF échoue après plusieurs minutes ; `docker compose logs docling` cite `DOCLING_SERVE_MAX_SYNC_WAIT` | Conversion plus longue que le délai de Docling (30 min) | Relever `DOCLING_SERVE_MAX_SYNC_WAIT` dans `docker-compose.docling.yml`, ou découper le document. |
+| Tout dépôt de PDF ou de DOCX échoue aussitôt | Docling arrêté ou pas encore prêt | `docker compose ps docling`, puis `docker compose logs docling`. Si l'overlay a été retiré, relancer `docker compose up open-webui-init`. |
+| Le conteneur `docling` redémarre pendant une conversion | Mémoire insuffisante (conteneur tué) | Relever `DOCLING_MEM_LIMIT` dans `.env`, sans dépasser la RAM disponible. |
+| `open-webui-init` s'arrête sur « DOCLING_PARAMS n'est pas du JSON valide » | Faute de frappe dans `docker-compose.docling.yml` | Corriger la valeur : un objet JSON, guillemets doubles. |
 
 ### 6.3 Interroger la base
 
@@ -364,8 +435,8 @@ Toujours comparer la réponse aux citations. L'origine du problème est souvent 
 |---|---|---|
 | Un élément manque, et il n'apparaît dans **aucune** citation | La recherche ne l'a pas trouvé (extrait coupé, Top K trop faible). | Augmenter Top K, reformuler la question avec les termes exacts du document. |
 | L'élément est **dans** une citation mais pas dans la réponse | Le modèle a résumé au lieu d'énumérer. | Renforcer le prompt système (« list all of them »). |
-| Une citation pointe vers une table des matières ou un pied de page | Bruit d'extraction du PDF. | Indexer le DOCX à la place. |
-| Une information est attribuée au mauvais acteur | Tableau aplati par l'extraction PDF. | Indexer le DOCX, ou interroger la section concernée directement. |
+| Une citation pointe vers une table des matières ou un pied de page | Bruit d'extraction du PDF. | Indexer le DOCX à la place. Docling (6.2.1) écarte les pieds de page, pas la table des matières. |
+| Une information est attribuée au mauvais acteur | Tableau aplati par l'extraction PDF. | Indexer le DOCX, activer Docling (6.2.1), ou interroger la section concernée directement. |
 | Une réponse précise sur un sujet absent des documents | Hallucination. | Vérifier le prompt système (« answer only from the provided context »). |
 
 ---
@@ -419,7 +490,7 @@ Signes d'un problème :
 | | Concurrent Requests | 2 (sinon « Too many open files » sur un gros document) |
 | | Top K | 8 |
 | | Top K Reranker | 8 (sinon 3 extraits seulement en recherche hybride) |
-| Workspace › Knowledge | documents | DOCX de préférence au PDF |
+| Workspace › Knowledge | documents | DOCX de préférence au PDF, ou PDF avec Docling (6.2.1) |
 
 Sur une installation neuve, les lignes *Interface* et *Documents* viennent de `docker-compose.yml`, et les lignes *Models* de `open-webui-init` si un compte administrateur est défini dans `.env`.
 
