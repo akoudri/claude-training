@@ -100,7 +100,7 @@ services:
       - RAG_EMBEDDING_CONCURRENT_REQUESTS=2
       - CHUNK_SIZE=1000
       - CHUNK_OVERLAP=150
-      - ENABLE_RAG_HYBRID_SEARCH=true  # BM25 + vecteurs, meilleur sur du contenu technique
+      - ENABLE_RAG_HYBRID_SEARCH=true  # mots-clés + vecteurs ; avec pgvector, un extrait doit contenir tous les mots (tutoriel 01, section 5)
       - RAG_TOP_K=8
       - RAG_TOP_K_RERANKER=8           # en recherche hybride, le plus petit des deux Top K s'applique
       # Tâches d'arrière-plan (tutoriel 01, section 4) : chacune occupe Ollama, qui ne traite qu'une requête à la fois
