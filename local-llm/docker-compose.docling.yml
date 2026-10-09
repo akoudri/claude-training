@@ -12,9 +12,10 @@
 #
 # Les réglages ne sont écrits qu'ici, et transmis à open-webui comme à open-webui-init.
 # OCR désactivé : il ne sert qu'aux PDF scannés et multiplie le temps de conversion (tutoriel 01, section 6.2.1).
+# Lecteur pypdfium2 : celui par défaut (docling_parse) colle les mots aux changements de police.
 x-docling-env: &docling-env
   DOCLING_SERVER_URL: http://docling:5001
-  DOCLING_PARAMS: '{"do_ocr": "false", "table_mode": "accurate"}'
+  DOCLING_PARAMS: '{"do_ocr": "false", "table_mode": "accurate", "pdf_backend": "pypdfium2"}'
 
 services:
   docling:

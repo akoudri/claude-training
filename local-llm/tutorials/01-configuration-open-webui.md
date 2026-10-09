@@ -335,6 +335,8 @@ Open WebUI ne lit ses variables d'extraction qu'au premier démarrage (Persisten
 
 **PDF scannés (OCR)** : l'OCR est désactivé, car il ne sert qu'aux PDF sans texte et multiplie le temps de conversion (6 s au lieu de 2 s pour 3 pages sur la configuration de référence). Pour l'activer, remplacer `"do_ocr": "false"` par `"do_ocr": "true"` dans `docker-compose.docling.yml` (variable `DOCLING_PARAMS`), puis `docker compose up -d`.
 
+**Lecteur de PDF** : l'overlay utilise le lecteur `pypdfium2` (`"pdf_backend": "pypdfium2"` dans `DOCLING_PARAMS`) plutôt que celui de Docling par défaut (`docling_parse`). Sur des spécifications techniques, ce dernier colle les mots là où la police change : `PassIfreturns` au lieu de « PassIf returns ». La recherche par mots-clés ne retrouve alors plus le terme. Mesuré sur la configuration de référence, sur une spécification de 107 pages : même durée de conversion (74 s), et 57 tableaux reconnus au lieu de 52.
+
 **Exercice : comparer les deux extracteurs.** Le PDF fictif `open-webui/exemples/matrice-acteurs-heron.pdf` contient un sommaire, un pied de page répété et un tableau dont certaines cellules sont vides ou tiennent sur plusieurs lignes. Le joindre à une conversation (bouton **+** → *Upload Files*), une fois sans Docling et une fois avec, et poser les mêmes questions :
 
 | Question | Réponse attendue |
