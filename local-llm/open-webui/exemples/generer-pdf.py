@@ -17,12 +17,16 @@ SORTIE = Path(__file__).with_name("matrice-acteurs-heron.pdf")
 PAGES = 3
 STYLES = getSampleStyleSheet()
 
+# Cellules sur plusieurs lignes et cellules vides : une fois le tableau aplati, plus rien n'indique à quelle colonne
+# appartient une valeur.
 ACTEURS = [
-    ["Organisation", "Rôle", "Classification\ndes données", "Accès au\nréférentiel SysML", "Statut"],
-    ["Acme Défense", "Maître d'ouvrage", "Niveau 3", "Lecture/écriture", "Validé"],
-    ["Novaltis", "Titulaire du marché", "Niveau 2", "Lecture/écriture", "Validé"],
-    ["Orbitec Systèmes", "Sous-traitant outillage", "Niveau 1", "Lecture seule", "En attente"],
-    ["Bureau Vertex", "Audit qualité", "Niveau 2", "Aucun", "Validé"],
+    ["Organisation", "Rôle", "Classification des données", "Accès au référentiel SysML", "Statut"],
+    ["Acme Défense", "Maître d'ouvrage, direction de l'ingénierie système", "Niveau 3", "Lecture/écriture", "Validé"],
+    ["Novaltis", "Titulaire du marché, pilotage et réalisation", "Niveau 2", "Lecture/écriture", "Validé"],
+    ["Orbitec Systèmes", "Sous-traitant outillage et intégration continue", "Niveau 1", "", "En attente"],
+    ["Bureau Vertex", "Audit qualité indépendant", "Niveau 2", "Lecture seule", "Validé"],
+    ["Kerlan Ingénierie", "Expertise SysML v2, appui ponctuel sur demande", "", "Lecture seule", "En attente"],
+    ["Direction des achats d'Acme Défense", "Suivi contractuel et facturation", "Niveau 3", "", "Validé"],
 ]
 LIVRABLES = [
     ["Livrable", "Exigence", "Responsable", "Relecteur", "Échéance"],
@@ -34,9 +38,11 @@ LIVRABLES = [
 
 
 def tableau(lignes, largeurs):
+    cellule = STYLES["BodyText"].clone("cellule", fontSize=9, leading=11)
+    entete = cellule.clone("entete", fontName="Helvetica-Bold")
+    lignes = [[Paragraph(v, entete if i == 0 else cellule) for v in ligne] for i, ligne in enumerate(lignes)]
     t = Table(lignes, colWidths=[l * cm for l in largeurs], repeatRows=1)
     t.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -75,7 +81,7 @@ def contenu():
                   "organisation au statut « En attente » n'intervient pas avant la validation de son habilitation "
                   "par Acme Défense.", texte),
         Spacer(1, 0.4 * cm),
-        tableau(ACTEURS, [3.6, 4.2, 2.8, 3.4, 2.4]),
+        tableau(ACTEURS, [3.4, 4.6, 2.8, 3.0, 2.2]),
         PageBreak(),
         Paragraph("3. Livrables et responsables", h1),
         Paragraph("Chaque livrable a un responsable, qui le rédige, et un relecteur, qui le valide avant sa "
