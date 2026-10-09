@@ -3,7 +3,8 @@
 # sur le CPU ; un profil GPU s'ajoute par COMPOSE_FILE dans .env (voir .env.example) :
 #   docker-compose.vulkan.yml : GPU AMD ou Intel, intégré ou dédié (Linux, via Vulkan)
 #   docker-compose.nvidia.yml : GPU NVIDIA (Linux ou WSL2, NVIDIA Container Toolkit requis)
-# n8n est optionnel et s'ajoute de la même façon : docker-compose.n8n.yml (tutoriel 03).
+# n8n est optionnel et s'ajoute de la même façon : docker-compose.n8n.yml (tutoriel 03). De même pour Docling,
+# qui améliore la lecture des PDF par Open WebUI : docker-compose.docling.yml (tutoriel 01, section 6.2.1).
 # Configuration de référence des mesures citées dans les tutoriels :
 #   Ryzen 7 7840HS + iGPU Radeon 780M (profil vulkan, mémoire partagée GTT ~16 Go), 30 Go de RAM.
 #
