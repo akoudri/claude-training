@@ -68,6 +68,18 @@ Après les réglages ci-dessous, la même requête aboutit en **25 à 45 s**.
    - si le port 5433 est déjà pris sur l'hôte, changer `POSTGRES_HOST_PORT`.
 
 3. Lancer la stack : `docker compose up -d`.
+
+   > **Profil NVIDIA : `could not select device driver "nvidia" with capabilities: [[gpu]]`**. Le démon Docker ne sait pas fournir le GPU au conteneur. Vérifier dans l'ordre :
+   >
+   > 1. `nvidia-smi` doit afficher le GPU sur l'hôte. Sinon, installer le pilote NVIDIA, ou, si la machine n'a pas de GPU NVIDIA, changer de ligne `COMPOSE_FILE` (tableau ci-dessus).
+   > 2. Sous Linux, installer le *NVIDIA Container Toolkit* (paquet `nvidia-container-toolkit`, voir https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), puis le déclarer à Docker : `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker`.
+   > 3. Tester l'accès au GPU depuis un conteneur : `docker run --rm --gpus all ubuntu nvidia-smi`. Une fois ce test réussi, relancer `docker compose up -d`.
+   >
+   > Pièges fréquents :
+   >
+   > - **Docker Desktop sous Linux** ne prend pas en charge les GPU NVIDIA : utiliser Docker Engine (paquet `docker-ce`). `docker context ls` indique le contexte actif (`desktop-linux` désigne Docker Desktop).
+   > - **Docker installé via snap** ignore la configuration écrite par `nvidia-ctk` : le remplacer par Docker Engine installé depuis le dépôt officiel de Docker.
+   > - **Windows** : Docker Desktop doit utiliser le backend WSL2, avec un pilote NVIDIA Windows récent. Ne pas installer de pilote NVIDIA dans la distribution WSL : `nvidia-smi` doit y répondre tel quel.
 4. Attendre le téléchargement des modèles. Il n'y a rien à installer à la main : le service `ollama-init` télécharge `LLM_MODEL` et `EMBED_MODEL` (définis dans `.env`) dès qu'Ollama est prêt, puis s'arrête. Au premier lancement, cela représente ~6,5 Go et prend plusieurs minutes. Les lancements suivants sont immédiats, car les modèles restent dans le volume `ollama`.
 
    ```bash
