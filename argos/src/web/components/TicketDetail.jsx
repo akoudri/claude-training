@@ -7,9 +7,9 @@ export default function TicketDetail({ ticket, onUpdated }) {
 
   async function changeStatus(status) {
     try {
-      const updated = await api.updateTicket(ticket.id, { status });
+      await api.updateTicket(ticket.id, { status });
       setError(null);
-      onUpdated(updated);
+      onUpdated();
     } catch (err) {
       setError(err.message);
     }

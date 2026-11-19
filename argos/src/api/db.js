@@ -1,17 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { MIGRATIONS_DIR, ROOT_DIR } from './paths.js';
-import { normalize } from './text.js';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export { MIGRATIONS_DIR };
-export const DEFAULT_DB_FILE = resolve(ROOT_DIR, process.env.ARGOS_DB ?? 'data/argos.db');
+export const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../migrations');
+export const DEFAULT_DB_FILE = process.env.ARGOS_DB ?? 'data/argos.db';
 
 export function openDb(file = DEFAULT_DB_FILE) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON');
-  db.function('normalize', { deterministic: true }, normalize);
   return db;
 }
 

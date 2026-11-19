@@ -13,10 +13,9 @@ const FILTERS = [
 
 export default function App() {
   const [filter, setFilter] = useState('open');
-  const [query, setQuery] = useState('');
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState(null);
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState(null);
 
   const [version, setVersion] = useState(0);
@@ -24,7 +23,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.listTickets(filter, query), api.getStats()])
+    Promise.all([api.listTickets(filter), api.getStats()])
       .then(([list, counts]) => {
         if (cancelled) return;
         setTickets(list);
@@ -35,14 +34,9 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [filter, query, version]);
+  }, [filter, version]);
 
-  // Le détail reste affiché même si le ticket sort du filtre courant (par exemple clos sous « Ouverts »).
-  const select = (id) => setSelected(tickets.find((t) => t.id === id) ?? null);
-  const handleUpdated = (ticket) => {
-    setSelected(ticket);
-    refresh();
-  };
+  const selected = tickets.find((t) => t.id === selectedId) ?? null;
 
   return (
     <div className="app">
@@ -63,28 +57,16 @@ export default function App() {
             {f.label}
           </button>
         ))}
-        <input
-          type="search"
-          aria-label="Rechercher"
-          placeholder="Rechercher…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
       </nav>
 
       <main>
         <section>
-          <TicketList
-            tickets={tickets}
-            selectedId={selected?.id ?? null}
-            onSelect={select}
-            emptyMessage={query.trim() ? `Aucun ticket ne correspond à « ${query.trim()} ».` : undefined}
-          />
+          <TicketList tickets={tickets} selectedId={selectedId} onSelect={setSelectedId} />
           <NewTicketForm onCreated={refresh} />
         </section>
         <aside>
           {selected ? (
-            <TicketDetail key={selected.id} ticket={selected} onUpdated={handleUpdated} />
+            <TicketDetail ticket={selected} onUpdated={refresh} />
           ) : (
             <p className="hint">Sélectionner un ticket pour afficher son détail.</p>
           )}

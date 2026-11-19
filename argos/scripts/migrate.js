@@ -1,4 +1,3 @@
-import '../src/api/env.js';
 import { openDb, migrate } from '../src/api/db.js';
 
 const applied = migrate(openDb());
