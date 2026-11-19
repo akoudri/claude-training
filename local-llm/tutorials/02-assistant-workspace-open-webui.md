@@ -2,7 +2,9 @@
 
 Ce guide explique comment assembler un **assistant spécialisé** (un « agent ») dans Open WebUI 0.11 : un modèle, des consignes, une base de documents et, si besoin, des outils. Il prend pour exemple l'assistant **Expert MBSE** construit sur `granite4.2:8b` et la base **MBSE Expert**.
 
-Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG). Les réglages du tutoriel 01 sont supposés faits, et la base **MBSE Expert** créée avec le corpus fictif (tutoriel 01, section 6.1). Les commandes `docker compose` se lancent depuis le dossier `local-llm/`.
+Il fait suite à [Configurer Open WebUI pour un LLM local](01-configuration-open-webui.md), qui couvre les réglages de la plateforme (paramètres du modèle de base, tâches d'arrière-plan, RAG). Les réglages du tutoriel 01 sont supposés faits, et la base **MBSE Expert** créée avec le corpus fictif (tutoriel 01, section 6.1).
+
+> Avec `OPENWEBUI_EXEMPLES=true` dans `.env` ([tutoriel 01, section 2](01-configuration-open-webui.md#2-premier-démarrage)), le service `open-webui-init` a déjà créé la base et l'assistant **Expert MBSE** avec les valeurs des sections 3 et 5. Suivez alors ces sections pour comprendre chaque réglage et le vérifier dans l'interface, puis passez aux tests (section 6). Les commandes `docker compose` se lancent depuis le dossier `local-llm/`.
 
 ---
 
@@ -56,7 +58,7 @@ Un assistant référence des bases et des outils : il faut donc **les créer ava
 
 | Bonne pratique | Pourquoi |
 |---|---|
-| Préférer **DOCX ou Markdown** au PDF | Le PDF aplatit les tableaux et transforme la table des matières et les pieds de page en extraits parasites. Une question sur un tableau extrait d'un PDF a attribué une information au mauvais acteur. |
+| Préférer **DOCX ou Markdown** au PDF, sauf avec Docling | Avec l'extracteur intégré, le PDF aplatit les tableaux et transforme la table des matières et les pieds de page en extraits parasites : une question sur un tableau extrait d'un PDF a attribué une information au mauvais acteur. Docling corrige l'essentiel de ces défauts ([tutoriel 01](01-configuration-open-webui.md#621-activer-docling-pour-les-pdf), section 6.2.1). |
 | **Une seule version** de chaque document | Un même rapport en PDF et en DOCX produit des extraits en double, qui occupent les places du Top K. |
 | Une base **par domaine** | Une base fourre-tout dilue la recherche. Mieux vaut plusieurs bases, attachées au bon assistant. |
 

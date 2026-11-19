@@ -1,0 +1,31 @@
+[project]
+name = "obfuscation"
+version = "0.1.0"
+description = "Obfuscation réversible de documents Office et PDF avant de les confier à Claude"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "lxml>=6.1",
+    "pymupdf4llm>=1.28",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+obfusquer = "obfuscation.cli:main_obfusquer"
+restaurer = "obfuscation.cli:main_restaurer"
+detecter = "obfuscation.cli:main_detecter"
+
+[dependency-groups]
+dev = [
+    "openpyxl>=3.1.5",
+    "pytest>=9.1",
+    "python-docx>=1.2",
+    "python-pptx>=1.0.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

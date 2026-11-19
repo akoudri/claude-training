@@ -12,7 +12,8 @@ Tout le contenu est rédigé en français.
   les apprenants clonent un dépôt Argos séparé, sans `CLAUDE.md`, que le lab M2 leur fait créer.
 - `argos-marketplace/` : marketplace de démonstration (plugin `argos-toolkit@janus-argos`), extension du lab M2.
 - `mcp/` : démos de serveurs MCP en Python (uv). `server.py` (bloc-notes NotesRapides), `blender_mcp_server.py` + `blender_server.py` (pont Claude Code → Blender, TCP 9876).
-- `local-llm/` : stack LLM locale (Ollama sur CPU, ou sur GPU via `docker-compose.vulkan.yml` / `docker-compose.nvidia.yml` choisis par `COMPOSE_FILE` dans `.env` ; Open WebUI, n8n, pgvector, passerelle nginx) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
+- `obfuscation/` : outil Python (uv) d'obfuscation réversible de documents Word, Excel, PowerPoint et PDF par dictionnaires, avant envoi à Claude (`obfusquer` / `restaurer`, et `detecter` qui propose un dictionnaire candidat à l'aide de l'Ollama de `local-llm/`).
+- `local-llm/` : stack LLM locale (Ollama sur CPU, ou sur GPU via `docker-compose.vulkan.yml` / `docker-compose.nvidia.yml` choisis par `COMPOSE_FILE` dans `.env` ; Open WebUI configuré au démarrage par le service `open-webui-init` (`open-webui/configurer.py`), pgvector, passerelle nginx ; n8n optionnel via `docker-compose.n8n.yml`, ajouté à `COMPOSE_FILE`) avec 6 tutoriels dans `tutorials/` et un agent de conformité n8n dans `n8n/`.
 - `local/` : matériel formateur (guide, bundles Argos, labs originaux, script de correction du support). Exclu de git.
 
 ## Commandes
@@ -20,10 +21,11 @@ Tout le contenu est rédigé en français.
 - Argos : `cd argos && npm install && npm test` (budgets de performance : `npm run perf`)
 - Agent n8n : `cd local-llm && node --test 'n8n/test/*.test.*'` ; build des workflows : `node n8n/scripts/build.mjs` ; déploiement : `n8n/scripts/deploy.sh`
 - MCP : `cd mcp && uv sync`
+- Obfuscation : `cd obfuscation && uv sync && uv run pytest`
 
 ## Règles
 
-- Ne jamais versionner de secrets ni de données locales : `local-llm/.env`, `local-llm/n8n/config/*` (seuls les `*.example.json` sont suivis), `local-llm/documents/`, `local-llm/reports/`, `mcp/notes.json`. Vérifier le `.gitignore` à chaque nouvel ajout.
+- Ne jamais versionner de secrets ni de données locales : `local-llm/.env`, `local-llm/n8n/config/*` (seuls les `*.example.json` sont suivis), `local-llm/documents/`, `local-llm/reports/`, `mcp/notes.json`, les tables de correspondance `*.table.json`, les dictionnaires candidats `*.candidats.yaml`, `obfuscation/exemples/generes/`. Vérifier le `.gitignore` à chaque nouvel ajout.
 - Les workflows de `local-llm/n8n/workflows/` sont générés par `build.mjs` à partir de `n8n/src/` : modifier les sources, pas le JSON. Ils ne doivent contenir aucun identifiant d'instance n8n.
 - Pas de chemins absolus propres à la machine dans les README et les tutoriels. Les tutoriels doivent fonctionner sur toute machine : une durée ou un débit mesuré est attribué à la « configuration de référence » (Ryzen 7 7840HS, iGPU Radeon 780M, profil vulkan).
 - Garder labs, support, errata et état d'Argos cohérents entre eux.

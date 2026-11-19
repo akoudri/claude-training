@@ -1,0 +1,48 @@
+# Service optionnel Docling : convertit en Markdown les documents déposés dans Open WebUI (PDF, DOCX, PPTX, XLSX…)
+# en analysant la mise en page : tableaux restitués en tableaux, en-têtes et pieds de page écartés, titres
+# conservés. Voir le tutoriel 01, section 6.2.1.
+# Activation : ajouter docker-compose.docling.yml à COMPOSE_FILE dans .env (voir .env.example), par exemple
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.docling.yml
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.vulkan.yml:docker-compose.n8n.yml:docker-compose.docling.yml
+# (sous Windows hors WSL, le séparateur est ";")
+#
+# Open WebUI ne lit ses variables d'extraction qu'au premier démarrage (PersistentConfig) : sur une installation
+# existante, c'est open-webui-init qui applique ces réglages, et qui revient à l'extracteur intégré si l'overlay
+# est retiré.
+#
+# Les réglages ne sont écrits qu'ici, et transmis à open-webui comme à open-webui-init.
+# OCR désactivé : il ne sert qu'aux PDF scannés et multiplie le temps de conversion (tutoriel 01, section 6.2.1).
+# Lecteur pypdfium2 : celui par défaut (docling_parse) colle les mots aux changements de police.
+x-docling-env: &docling-env
+  DOCLING_SERVER_URL: http://docling:5001
+  DOCLING_PARAMS: '{"do_ocr": "false", "table_mode": "accurate", "pdf_backend": "pypdfium2"}'
+
+services:
+  docling:
+    restart: unless-stopped
+    image: quay.io/docling-project/docling-serve-cpu:v1.35.0
+    environment:
+      # Open WebUI appelle la conversion synchrone : au-delà de ce délai (120 s par défaut), elle échoue en HTTP 504.
+      - DOCLING_SERVE_MAX_SYNC_WAIT=1800
+    mem_limit: ${DOCLING_MEM_LIMIT:-6g}
+    # Aucun port publié : seul Open WebUI l'appelle, sur le réseau interne de la stack.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/ready', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s   # chargement des modèles de mise en page au démarrage
+
+  open-webui:
+    environment:
+      <<: *docling-env
+      CONTENT_EXTRACTION_ENGINE: docling
+    depends_on:
+      docling: { condition: service_healthy }
+
+  open-webui-init:
+    environment:
+      <<: *docling-env
+      OPENWEBUI_DOCLING: "true"
+    depends_on:
+      docling: { condition: service_healthy }
